@@ -1,0 +1,58 @@
+{% extends 'base.html' %}
+
+{% load static %} 
+
+{% block styles %}
+<style>
+#messageWaitIcon video {
+    width: 300px;
+    height: 300px;
+}
+
+.success-header, .success-message {
+    font-family: Arial, Sans-Serif;
+}
+
+.success-header {
+    font-size: 36px;
+    font-weight: bold;
+    color: #5431B2;
+}
+
+.success-message {
+    font-size: 16px;
+}
+
+.btn-send {
+    border-radius: 0;
+    background-color: #5431B2;
+    color: white;
+    margin-top: 20px;
+    margin-bottom: 20px;
+}
+
+.btn-send:hover {
+    background-color: #FFC617;
+    color: #5431B2;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container text-center mt-5">
+    <div id="messageWaitIcon" style="margin: auto; width: 300px; height: 300px;">
+        <video width="300" height="300" autoplay loop>
+            <source src="{% static 'images/messagewait.mp4' %}" type="video/mp4">
+        </video>
+    </div>
+    <h1 class="success-header">Your Request Has Been Submitted Successfully.</h1>
+    <p class="success-message">We Will Respond Within Two Business Days.</p>
+    {% if source_page == 'update_profile' %}
+    <a href="{% url 'update_profile' %}" class="btn btn-send">OK</a>
+    {% elif source_page == 'chatbot' %}
+    <a href="{% url 'chatbot' %}" class="btn btn-send">OK</a>
+    {% else %}
+    <a href="{% url 'login' %}" class="btn btn-send">OK</a> <!-- Adjust 'chatbot' to your actual home URL name if necessary -->
+    {% endif %}
+</div>
+{% endblock %}
