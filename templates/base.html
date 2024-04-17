@@ -1,0 +1,143 @@
+{% load static %}
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Audney</title>
+  <!-- Bootstrap CSS from local static files -->
+  <link href="{% static 'css/bootstrap.min.css' %}" rel="stylesheet">
+  <!-- Additional Styles -->
+  <style>
+  /* The Modal (background) */
+  .modal {
+  display: none; /* Hidden by default */
+  position: fixed; /* Stay in place */
+  z-index: 1; /* Sit on top */
+  left: 0;
+  top: 0;
+  width: 100%; /* Full width */
+  height: 100%; /* Full height */
+  overflow: auto; /* Enable scroll if needed */
+  background-color: rgb(0,0,0); /* Fallback color */
+  background-color: rgba(0,0,0,0.4); /* Black w/ opacity */
+  -webkit-backdrop-filter: blur(50px); /* Frosted glass effect */
+  backdrop-filter: blur(50px); /* Frosted glass effect */
+}
+
+.modal-content {
+  position: fixed;
+  background-color: #fefefe;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  padding: 20px;
+  border: 1px solid #888;
+  width: 80%; /* Could be more or less, depending on screen size */
+  text-align: center; /* Center the text inside the modal */
+  max-width: 600px; /* Set a max-width if needed */
+  box-sizing: border-box;
+}
+
+.continueSession-btn {
+  border-radius: 0;
+  background-color: #5431B2;
+  color: white;
+}
+
+.continueSession-btn:hover {
+  background-color: #FFC617;
+  color: #5431B2;
+}
+
+.logout-btn {
+  border-radius: 0;
+  background-color: #FFC617;
+  color: #5431B2;
+}
+
+.logout-btn:hover {
+  background-color: #5431B2;
+  color: white;
+}
+  </style>
+  {% block styles %}{% endblock %}
+</head>
+<body data-session-timeout="{{ request.session.get_expiry_age|default:'1800' }}">
+  {% block content %}{% endblock %}
+
+  <!-- Session Timeout Modal -->
+<div id="sessionTimeoutModal" class="modal">
+  <div class="modal-content">
+    <h2>Session Timeout Warning</h2>
+    <p>Due to inactivity your session will timeout in:</p>
+    <p id="timeoutTimer" style="font-weight: bold; color: #5431B2; font-size: 20px;">3:00</p>
+    <button id="continueSessionButton" class="continuesession-btn">Continue Session</button>
+    <button id="logoutButton" class="logout-btn">Logout</button>
+  </div>
+</div>
+
+  <!-- jQuery from local static files -->
+  <script src="{% static 'js/jquery-3.6.0.min.js' %}"></script>
+  <!-- Bootstrap Bundle JS from local static files -->
+  <script src="{% static 'js/bootstrap.bundle.min.js' %}"></script>
+
+  <script>
+    document.addEventListener('DOMContentLoaded', function() {
+      const body = document.querySelector('body');
+      const sessionTimeout = parseInt(body.getAttribute('data-session-timeout'), 10);
+      const warningTime = 180; // Warning time in seconds (e.g., 3 minutes before timeout)
+      let timeoutTimer;
+      let countdownTimer;
+      let timeLeft = warningTime; // Time left for the warning period in seconds
+
+      function showSessionTimeoutWarning() {
+        const sessionTimeoutModal = document.getElementById('sessionTimeoutModal');
+        sessionTimeoutModal.style.display = 'block';
+        startCountdown();
+      }
+
+      function startSessionTimer() {
+        clearTimeout(timeoutTimer);
+        timeoutTimer = setTimeout(showSessionTimeoutWarning, (sessionTimeout - warningTime) * 1000);
+      }
+
+      function continueSession() {
+        const sessionTimeoutModal = document.getElementById('sessionTimeoutModal');
+        sessionTimeoutModal.style.display = 'none';
+        clearTimeout(countdownTimer);
+        timeLeft = warningTime;
+        startSessionTimer();
+        // Add any necessary logic to ping the server to keep the session alive
+      }
+
+      function logout() {
+        window.location.href = '/logout';
+      }
+
+      function startCountdown() {
+        countdownTimer = setInterval(function() {
+          let minutes = Math.floor(timeLeft / 60);
+          let seconds = timeLeft % 60;
+          document.getElementById('timeoutTimer').textContent = `${minutes}:${seconds < 10 ? '0' : ''}${seconds}`;
+          if (timeLeft <= 0) {
+            clearInterval(countdownTimer);
+            logout();
+          }
+          timeLeft -= 1;
+        }, 1000);
+      }
+
+      // Event listeners for buttons
+      document.getElementById('continueSessionButton').addEventListener('click', continueSession);
+      document.getElementById('logoutButton').addEventListener('click', logout);
+
+      // Start the session timer when the page loads
+      startSessionTimer();
+    });
+  </script>
+  
+  {% block scripts %}{% endblock %}
+</body>
+</html>

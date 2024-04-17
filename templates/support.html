@@ -1,0 +1,55 @@
+{% extends 'base.html' %}
+
+{% load static %}
+
+{% block styles %}
+<style>
+.card-header {
+    background-color: #5431B2;
+    color: white;
+    font-size: 24px;
+    font-weight: bold;
+    text-align: center;
+}
+
+.btn-send {
+    border-radius: 0;
+    background-color: #5431B2;
+    color: white;
+}
+
+.btn-send:hover {
+    background-color: #FFC617;
+    color: #5431B2;
+}
+
+/* Adjust margin for visual spacing if necessary */
+.btn-send + .btn-send {
+    margin-left: 10px;
+}
+</style>
+{% endblock %}
+
+
+{% block content %}
+<div class="card">
+    <div class="card-header">Support</div>
+    <div class="card-body">
+        <form method="post">
+            {% csrf_token %}
+            <!-- Hidden input to capture the current page path -->
+            <input type="hidden" name="from" value="{{ request.path }}">
+            {{ form.as_p }}
+            <button type="submit" class="btn btn-send">Submit</button>
+            {% if is_from_update_profile %}
+            <a href="{% url 'update_profile' %}" class="btn btn-send">Cancel</a>
+            {% elif request.user.is_authenticated %}
+            <a href="{% url 'chatbot' %}" class="btn btn-send">Cancel</a>
+            {% else %}
+            <a href="{% url 'login' %}" class="btn btn-send">Cancel</a>
+            {% endif %}
+        </form>
+    </div>
+</div>
+{% endblock %}
+

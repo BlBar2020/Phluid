@@ -1,0 +1,513 @@
+<!-- Extend the base.html file, which contains the basic structure of the website -->
+{% extends 'base.html' %}
+{% load static %}
+
+<!-- Define a block of CSS styles that will be inserted into the base.html file -->
+{% block styles %}
+<style>
+  /* Set the height of the body and html elements to 100% */
+  body,
+  html {
+    height: 100%;
+    margin: 0;
+  }
+
+  /* Style the messages box */
+  .messages-box {
+    /* Make the messages box fill the remaining space */
+    flex: 1;
+    /* Add a scrollbar if the content overflows */
+    overflow-y: auto;
+    padding-bottom: 100px;
+    position: relative;
+    max-height: calc(100vh - 135px);
+  }
+
+  /* Remove the padding from the left side of the messages list */
+  .messages-list {
+    padding-left: 0;
+  }
+
+  /* Style the individual messages */
+  .message {
+    /* Add a margin to the bottom of each message */
+    margin-bottom: 15px;
+    /* Remove the default list style */
+    list-style: none;
+  }
+
+  /* Style the text of the messages */
+  .message-text {
+    /* Add padding around the text */
+    padding: 10px 20px;
+    /* Make the corners rounded */
+    border-radius: 25px;
+    /* Display the text inline with other elements */
+    display: inline-block;
+    /* Limit the width of the text to 80% of the parent element */
+    max-width: 80%;
+  }
+
+  /* Style the sent messages */
+  .sent .message-text {
+    /* Change the background color and text color */
+    background-color: #5431B2;
+    color: white;
+    /* Align the text to the right */
+    align-self: flex-end;
+    /* Add a margin to the right side */
+    margin-right: 15px;
+    /* Remove the margin from the left side */
+    margin-left: auto;
+    /* Make the bottom right corner not rounded */
+    border-bottom-right-radius: 0;
+  }
+
+  /* Style the received messages */
+  .received .message-text {
+    /* Change the background color */
+    background-color: #FFC617;
+    /* Align the text to the left */
+    align-self: flex-start;
+    /* Add a margin to the left side */
+    margin-left: 15px;
+    /* Remove the margin from the right side */
+    margin-right: auto;
+    /* Make the bottom left corner not rounded */
+    border-bottom-left-radius: 0;
+  }
+
+  /* Style the message form */
+  .message-form {
+    /* Display the form elements in a row */
+    display: flex;
+    /* Position the form at the bottom of the page */
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    /* Add padding around the form */
+    padding: 10px;
+    /* Change the background color */
+    background-color: white;
+  }
+
+  /* Style the message input field */
+  .message-input {
+    /* Make the input field fill the remaining space */
+    flex: 1;
+    /* Make the corners not rounded */
+    border-radius: 0;
+    /* Remove the border from the right side */
+    border-right: none;
+  }
+
+  /* Style the send button */
+  .btn-send {
+    /* Make the corners not rounded */
+    border-radius: 0;
+    /* Change the background color */
+    background-color: #5431B2;
+  }
+
+  /* Change the background color and text color of the send button when it's hovered over */
+  .btn-send:hover {
+    background-color: #FFC617;
+    color: #5431B2
+  }
+
+  /* Style the chat container */
+  .chat-container {
+    /* Set the height to 100% */
+    height: 100vh;
+    /* Display the elements in a column */
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* Change the background color of the card header */
+  .card-header {
+    background-color: #5431B2 !important;
+  }
+
+  /* Style the logout link */
+  .header-link {
+    /* Change the text color */
+    color: #FFC617;
+    /* Remove the underline from the link */
+    text-decoration: none;
+  }
+
+  #messageWaitIcon {
+    position: fixed;
+    width: 200px;
+    height: 200px;
+    right: -80px;
+    bottom: -60px;
+    transform: translate(-50%, -50%); 
+    z-index: 1000;
+    background-color: transparent;
+  }
+
+  #messageWaitIcon img {
+    width: 100%;
+    height: auto;
+    display: block;
+  }
+
+  .stock-link { cursor: pointer; }
+  
+  .modal {
+  display: none; /* Hidden by default */
+  position: fixed; /* Stay in place */
+  z-index: 1; /* Sit on top */
+  left: 0;
+  top: 0;
+  width: 100%; /* Full width */
+  height: 100%; /* Full height */
+  overflow: auto; /* Enable scroll if needed */
+  background-color: rgb(0,0,0); /* Fallback color */
+  background-color: rgba(0,0,0,0.4); /* Black w/ opacity */
+  -webkit-backdrop-filter: blur(50px); /* Frosted glass effect */
+  backdrop-filter: blur(50px); /* Frosted glass effect */
+}
+
+.modal-content {
+  position: fixed;
+  background-color: #fefefe;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  padding: 20px;
+  border: 1px solid #888;
+  width: 80%; /* Could be more or less, depending on screen size */
+  text-align: center; /* Center the text inside the modal */
+  max-width: 600px; /* Set a max-width if needed */
+  box-sizing: border-box;
+}
+
+/* Resize the warning icon image within Modal Content */
+.modal-content img {
+  width: 100px; /* Adjust as needed */
+  height: auto;
+  margin-bottom: 20px; /* Add some space below the image */
+}
+
+/* The Close Button */
+.close {
+  position: absolute;
+  right: 10px;
+  top: 10px;
+  color: #aaa;
+  float: right;
+  font-size: 28px;
+  font-weight: bold;
+}
+
+.close:hover,
+.close:focus {
+  color: black;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+/* Adjust the "I Understand" Button Size and Appearance */
+#understandButton {
+  border-radius: 0;
+  background-color: #5431B2;
+  color: white;
+  border: none;
+  font-size: 16px;
+  width: auto; /* Allow the button to size according to its content */
+  padding: 10px 20px; /* Adjust padding as needed */
+  margin: 20px auto; /* Center the button and add some space above it */
+  display: inline-block; /* Make it inline-block to allow auto width */
+  transition: background-color 0.3s ease;
+}
+
+#understandButton:hover, #understandButton:focus {
+  background-color: #FFC617; /* Change color on hover/focus */
+  color: #5431B2; /* Change text color on hover/focus */
+}
+
+
+</style>
+{% endblock %}
+
+<!-- Define the content block that will be inserted into the base.html file -->
+{% block content %}
+
+<!-- Disclaimer Modal -->
+<div id="disclaimerModal" class="modal">
+  <div class="modal-content">
+    <span class="close">&times;</span>
+    <img src="{% static 'images/warning_icon.jpg' %}" alt="Warning Icon" style="display: block; margin: auto;">
+    <h5>Disclaimer:</h5><br>
+      <p>Thank you for engaging with Audney, your personal virtual financial advisor. While we strive to provide accurate and helpful information, it's important to note that Audney is in an alpha state and at this time is intended for educational, informational and testing purposes only.
+      We strongly advise against solely relying on the advice provided by Audney to make financial decisions. Financial matters can be complex and dynamic, and individual circumstances vary widely. Factors such as personal financial goals, risk tolerance, and market conditions should all be carefully considered before making any decisions.</p><br>
+      <p>The information Audney provides should be used as a supplement to your own research and consultation with qualified financial professionals. It's essential to seek personalized advice tailored to your specific situation before taking any significant financial actions.</p><br>
+      <p>By using Audney as your virtual financial advisor, you acknowledge and agree that we are not liable for any consequences resulting from your reliance on the information provided. We encourage you to use your judgment and discretion when interpreting and applying the advice offered by the virtual financial advisor.</p><br>
+      <p>Remember, financial decisions carry inherent risks, and thorough due diligence is crucial. We appreciate your understanding and cooperation in using Audney responsibly.</p><br>
+
+    <button id="understandButton" class="btn-send">I Understand</button>
+  </div>
+</div>
+<!-- Create a container for the chat interface -->
+<div class="chat-container">
+  <!-- Create a card for the chat interface -->
+  <div class="card flex-grow-1">
+    <!-- Create a header for the card with the title 'Audney' -->
+    <div class="card-header bg-primary text-white">Audney</div>
+    
+    <div id="messageWaitIcon">
+      <video width="200" height="200" autoplay loop>
+        <source src="{% static 'images/messagewait.mp4' %}" type="video/mp4">
+        Please Wait...
+      </video>
+    </div>
+    <!-- Check if the user is authenticated -->
+    {% if user.is_authenticated %}
+    <!-- If the user is authenticated, display a welcome message and links to update profile, logout, and support -->
+    <div class="card-header bg-primary text-white"><b>Welcome, {{user.username}}</b>
+      <a href="update_profile" class="header-link">Update Profile</a>
+      <span class="separator">|</span>
+      <a href="logout" class="header-link">Logout</a>
+      <span class="separator">|</span>
+      <a href="{% url 'support' %}" class="header-link">Support</a> <!-- Support link added here -->
+    </div>
+    {% else %}
+    <!-- If the user is not authenticated, display an empty header -->
+    <div class="card-header bg-primary text-white">
+    </div>
+    {% endif %}
+    <!-- Create a box for the messages -->
+    <div class="card-body messages-box">
+      <!-- Create a list for the messages -->
+      <ul class="list-unstyled messages-list">
+        <!-- Loop through the chats -->
+        {% for chat in chats %}
+        <!-- Check if the chat user is the same as the request user -->
+        {% if chat.user == request.user %}
+        <!-- If the chat user is the same as the request user, display the chat message as a sent message -->
+        <li class="message sent">
+          <div class="message-text">
+            <div class="message-sender">
+              <b>You</b>
+            </div>
+            <div class="message-content">
+              {{chat.message}}
+            </div>
+          </div>
+        </li>
+        <!-- Display the chat response as a received message -->
+        <li class="message received">
+          <div class="message-text">
+            <div class="message-sender">
+              <b>Audney</b>
+            </div>
+            <div class="message-content">
+              {{chat.response|safe}}
+            </div>
+          </div>
+        </li>
+        {% endif %}
+        {% endfor %}
+      </ul>
+    </div>
+    <!-- Create a form for sending messages -->
+    <form class="message-form">
+      <!-- Include the CSRF token for security -->
+      {%csrf_token%}
+      <!-- Create an input group for the message input field and send button -->
+      <div class="input-group">
+        <!-- Create a text input field for the message -->
+        <input type="text" class="form-control message-input" placeholder="Type your message...">
+        <!-- Create a send button -->
+        <div class="input-group-append">
+          <button type="submit" class="btn btn-primary btn-send">Send</button>
+        </div>
+      </div>
+    </form>
+  </div>
+  <!-- Create a script for handling the form submission -->
+  <script>
+
+    // Utility function to get CSRF token
+    function getCsrfToken() {
+      return document.cookie.split('; ').find(row => row.startsWith('csrftoken=')).split('=')[1];
+    }
+
+// Initialize lastMessageId from sessionStorage or set to 0 if not present
+
+
+    // Function to fetch chat history
+    function fetchChatHistory() {
+        const lastMessageId = sessionStorage.getItem('lastMessageId') || 0;
+        console.log(`Fetching chat history, starting after messageId: ${lastMessageId}`);
+        fetch(`chat/history/`, {
+            method: 'GET',
+        })
+        .then(response => {
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            return response.json();
+        })
+        .then(data => {
+            // Ensure messages are ordered by timestamp
+            data.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp)); // Make sure to use 'timestamp' as it is the key you're sending from the backend
+            console.log(`Fetched ${data.length} messages from chat history`);
+            data.forEach(chat => {
+                let messageType = chat.type === 'user' ? 'sent' : 'received';
+                const isStockResponse = chat.type === 'stock_response'; // Adjust based on actual type name if different
+                const tickerQuote = isStockResponse ? chat.ticker_quote : null;
+
+                // For stock responses, use tickerQuote as the message to display
+                const messageToDisplay = isStockResponse ? `Ticker: ${chat.query} - ${tickerQuote}` : chat.message;
+
+                displayMessage(messageToDisplay, messageType, tickerQuote); // Pass tickerQuote if your display logic uses it
+            });
+            scrollToBottom();
+        })
+        .catch(error => console.error('Error fetching chat history:', error));
+    }
+
+    document.addEventListener('DOMContentLoaded', function() {
+      // Fetch chat history
+      fetchChatHistory();
+  
+      // Check if the disclaimer has been accepted
+      if (localStorage.getItem('disclaimerAccepted') !== 'true') {
+        // Show the disclaimer modal if not accepted
+        document.getElementById('disclaimerModal').style.display = 'block';
+      }
+    });
+  
+    function displayMessage(message, type, tickerQuote = null) {
+        const messagesContainer = document.querySelector('.messages-box');
+        const messageElement = document.createElement('div');
+        messageElement.className = `message ${type}`;
+
+        let displayText = message;
+        if (tickerQuote && tickerQuote !== null) { // Check explicitly for non-null values
+            displayText += ` - ${tickerQuote}`;
+        }
+
+        messageElement.innerHTML = type === 'received' ?
+            `<div class="message-text received"><b>Audney<br></b> ${displayText}</div>` :
+            `<div class="message-text sent"><b>You<br></b>${displayText}</div>`;
+
+        messagesContainer.appendChild(messageElement);
+        scrollToBottom(); // Ensure the chat window scrolls to the latest message
+    }
+
+    // Function to handle message sending
+    function sendMessage(message) {
+      const payload = { message: message };
+  
+      fetch(`/chat/response/`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRFToken': getCsrfToken(),
+        },
+        body: JSON.stringify(payload)
+      })
+      .then(response => response.json())
+      .then(data => {
+        displayMessage(data.message, 'received'); // Display response as a received message
+      })
+      .catch(error => console.error('Error sending message:', error))
+      .finally(() => messageWaitIcon.style.display = 'none');
+    }
+  
+    // Function to fetch and display stock price
+    function fetchStockPrice(symbol, companyName) {
+      messageWaitIcon.style.display = 'block'; // Show loading indicator
+  
+      fetch(`/get_stock_price/?symbol=${encodeURIComponent(symbol)}&companyName=${encodeURIComponent(companyName)}`, {
+        method: 'GET',
+      })
+      .then(response => response.json())
+      .then(data => {
+        if (data.success) {
+          displayMessage(`${companyName} is currently priced at ${data.price}`, 'received');
+        } else {
+          displayMessage('Error fetching stock price.', 'received');
+        }
+      })
+      .catch(error => {
+        console.error('Error fetching stock price:', error);
+        displayMessage('Error fetching stock price.', 'received');
+      })
+      .finally(() => messageWaitIcon.style.display = 'none');
+    }
+  
+    // Initialization code to set up event listeners
+    document.addEventListener('DOMContentLoaded', () => {
+      const messageForm = document.querySelector('.message-form');
+      const messageInput = document.querySelector('.message-input');
+      const messageWaitIcon = document.getElementById('messageWaitIcon');
+      messageWaitIcon.style.display = 'none'; // Initially hide the loading indicator
+  
+      messageForm.addEventListener('submit', event => {
+        event.preventDefault();
+        const message = messageInput.value.trim();
+        if (message) {
+          displayMessage(message, 'sent');
+          sendMessage(message);
+          messageInput.value = ''; // Clear the input field
+        }
+        messageWaitIcon.style.display = 'block'; // Show loading indicator
+      });
+
+      fetchChatHistory(); // Fetch chat history when the page loads
+  
+      // Handling clicks on stock links within messages
+      document.querySelector('.messages-box').addEventListener('click', event => {
+        const stockLink = event.target.closest('.stock-link');
+        if (stockLink) {
+          const tickerSymbol = stockLink.getAttribute('data-ticker-symbol');
+          const companyName = stockLink.textContent.split('(')[0].trim();
+          fetchStockPrice(tickerSymbol, companyName);
+        }
+      });
+    });
+  
+    // Function to scroll the chat to the bottom
+    function scrollToBottom() {
+      const messagesBox = document.querySelector('.messages-box');
+      messagesBox.scrollTop = messagesBox.scrollHeight;
+    }
+
+    // Modal script
+    const modal = document.getElementById('disclaimerModal');
+    const btn = document.getElementById('understandButton');
+    const span = document.getElementsByClassName('close')[0];
+
+    btn.onclick = function() {
+      modal.style.display = 'none';
+      // Save acceptance to localStorage
+      localStorage.setItem('disclaimerAccepted', 'true');
+    };
+
+    span.onclick = function() {
+    window.location.href = '/logout';
+    };
+
+    window.onload = function() {
+      if (localStorage.getItem('disclaimerAccepted') !== 'true') {
+        modal.style.display = 'block';
+      }
+    };
+
+    // Logout functionality
+    // document.getElementById('logoutButton').addEventListener('click', function() {
+      // localStorage.removeItem('disclaimerAccepted');
+      // window.location.href = '/logout'; // Replace with your actual logout URL
+    // });
+
+  </script>
+  
+  
+  {% endblock %}
