@@ -44,15 +44,17 @@ from django.core.mail import EmailMessage
 from .forms import SupportForm
 
 # Import OpenAI module
-from openai import OpenAI
+import openai
 
 # Get a logger instance
 logger = logging.getLogger(__name__)
 
 
 def ask_openai(user_input, user):
-    client = openai.OpenAI(api_key=settings.OPENAI_API_KEY)
 
+    # Set the API key for OpenAI client
+    client = openai.OpenAI(api_key=settings.OPENAI_API_KEY)
+    
     # Updating and gathering context as before
     update_market_conditions()
     market_conditions = MarketCondition.objects.all()
@@ -67,14 +69,21 @@ def ask_openai(user_input, user):
                               f"Savings Coverage: {user_profile.get_savings_months_display()}."
     user_context = f"I am {user_age} years old. My financial goal is {user_financial_goal}. {additional_user_details}"
 
+    # Refine the system message to guide the model
+    system_message = (
+        f"Here is some market data: {market_conditions_str}. "
+        f"The user has the following financial profile: {user_context}. "
+        "When responding, consider this user's financial goals, risk tolerance, and market data to provide personalized advice. "
+        "Your tone should be friendly, supportive, and informative, much like a personal financial advisor who is also a friend."
+    )
+
     try:
         # Sending the chat completion request
         chat_completion = client.chat.completions.create(
             model="gpt-4",
             messages=[
-                {"role": "system", "content": "You are a professional, emotionally intelligent, and friendly financial advisor named Audney."},
-                {"role": "user", "content": market_conditions_str},
-                {"role": "user", "content": user_context},
+                {"role": "system", "content": "You are a professional, emotionally intelligent, and friendly financial advisor named Audney. Your goal is to educate the user on their finances and provide tailored advice."},
+                {"role": "system", "content": system_message},
                 {"role": "user", "content": user_input}
             ]
         )
@@ -112,7 +121,6 @@ def ask_openai(user_input, user):
     except Exception as e:
         logger.error(f"Error calling OpenAI API: {e}")
         return "An error occurred while processing your request."
-
 
 @require_http_methods(["GET", "POST"])
 def chatbot_response(request):

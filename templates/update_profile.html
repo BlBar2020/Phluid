@@ -20,7 +20,7 @@
         padding: 20px;
     }
 
-    .card {
+    .update-profile-card {
         background-color: #f0f0f0;
         border: 1px solid #ccc;
         border-radius: 4px;
@@ -28,7 +28,7 @@
         margin-bottom: 20px;
     }
 
-    .card-header {
+    .update-profile-card-header {
         background-color: #5431B2;
         color: white;
         font-size: 16px;
@@ -38,7 +38,7 @@
         justify-content: start;
     }
 
-    .card-body {
+    .update-profile-card-body {
         padding: 20px;
     }
 
@@ -75,7 +75,7 @@
         margin: 20px 0; /* Spacing above and below the separator */
     }
 
-    .header-link {
+    .update-profile-header-link {
         color: #FFC617;
         text-decoration: none;
         font-size: 16px;
@@ -94,16 +94,16 @@
 </style>
 
 <!-- Profile update form -->
-<div class="card">
-    <div class="card-header">Update Profile</div>
-    <div class="card-header">
+<div class="update-profile-card">
+    <div class="update-profile-card-header">Update Profile</div>
+    <div class="update-profile-card-header">
         <!-- Links for Logout and Support, with separators -->
         <a href="{% url 'logout' %}" class="header-link">Logout</a>
         <span class="separator">|</span>
-        <a href="{% url 'support' %}?from=update_profile" class="header-link">Support</a>
+        <a href="{% url 'support' %}?from=update_profile" class="update-profile-header-link">Support</a>
       </div>
     </div>
-    <div class="card-body">
+    <div class="update-profile-card-body">
         <!-- Start the form, set method to POST and disable autocomplete -->
         <form method="post" autocomplete="off">
             <!-- Add CSRF token for security -->

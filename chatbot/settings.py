@@ -1,7 +1,20 @@
 # Import necessary modules
 from pathlib import Path
-from .credentials import OPENAI_API_KEY, POLYGON_API_KEY
+from dotenv import load_dotenv
 import os
+
+# Get the base directory of the project
+BASE_DIR = Path(__file__).resolve().parent.parent
+
+# Load environment variables from .env file
+dotenv_path = os.path.join(BASE_DIR, '.env')
+load_dotenv()
+
+# Print the loaded API key for verification
+OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
+print(f"API Key loaded in settings.py: {OPENAI_API_KEY}")
+if not OPENAI_API_KEY:
+    raise ValueError("Missing environment variable: OPENAI_API_KEY")
 
 # Set the session cookie age to 30 minutes (1800 seconds)
 SESSION_COOKIE_AGE = 1800
@@ -14,7 +27,7 @@ SECRET_KEY = os.getenv('DJANGO_SECRET_KEY')
 
 
 # Set the debug mode
-DEBUG = False
+DEBUG = True
 
 # Set the allowed hosts for the server
 ALLOWED_HOSTS = ['127.0.0.1', 'localhost', 'phluid.ai', 'www.phluid.ai']
@@ -104,9 +117,15 @@ USE_I18N = True
 USE_TZ = True
 
 # Set the static files settings
-STATIC_URL = "/static/"
-STATICFILES_DIRS = [os.path.join(BASE_DIR, 'static')]
-STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
+BASE_DIR = Path(__file__).resolve().parent.parent
+
+STATIC_URL = '/static/'
+
+STATICFILES_DIRS = [
+    BASE_DIR / "static",
+]
+
+STATIC_ROOT = BASE_DIR / "staticfiles"
 
 
 STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'

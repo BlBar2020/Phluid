@@ -113,7 +113,24 @@
   /* Change the background color and text color of the send button when it's hovered over */
   .btn-send:hover {
     background-color: #FFC617;
-    color: #5431B2
+    color: #5431B2;
+  }
+
+  /* Responsive adjustments for mobile devices */
+  @media (max-width: 576px) { /* Adjusting for mobile devices */
+    .disclaimer-modal-content {
+      padding: 10px; /* Reduce padding */
+      width: 90%; /* Make the modal narrower */
+    }
+
+    #understandButton {
+      padding: 12px 24px; /* Larger button for easier tapping */
+      font-size: 18px; /* Larger text for readability */
+    }
+
+    .disclaimer-modal-content h5, .disclaimer-modal-content p {
+      font-size: 14px; /* Smaller text size */
+    }
   }
 
   /* Style the chat container */
@@ -144,7 +161,7 @@
     height: 200px;
     right: -80px;
     bottom: -60px;
-    transform: translate(-50%, -50%); 
+    transform: translate(-50%, -50%);
     z-index: 1000;
     background-color: transparent;
   }
@@ -155,116 +172,119 @@
     display: block;
   }
 
-  .stock-link { cursor: pointer; }
-  
-  .modal {
-  display: none; /* Hidden by default */
-  position: fixed; /* Stay in place */
-  z-index: 1; /* Sit on top */
-  left: 0;
-  top: 0;
-  width: 100%; /* Full width */
-  height: 100%; /* Full height */
-  overflow: auto; /* Enable scroll if needed */
-  background-color: rgb(0,0,0); /* Fallback color */
-  background-color: rgba(0,0,0,0.4); /* Black w/ opacity */
-  -webkit-backdrop-filter: blur(50px); /* Frosted glass effect */
-  backdrop-filter: blur(50px); /* Frosted glass effect */
+  .stock-link {
+    cursor: pointer;
+  }
+
+  .disclaimer-modal {
+    display: none; /* Hidden by default */
+    position: fixed; /* Stay in place */
+    z-index: 1; /* Sit on top */
+    left: 0;
+    top: 0;
+    width: 100%; /* Full width */
+    height: 100%; /* Full height */
+    overflow: auto; /* Enable scroll if needed */
+    background-color: rgb(0,0,0); /* Fallback color */
+    background-color: rgba(0,0,0,0.4); /* Black w/ opacity */
+    -webkit-backdrop-filter: blur(50px); /* Frosted glass effect */
+    backdrop-filter: blur(50px); /* Frosted glass effect */
+  }
+
+  .disclaimer-modal-content {
+    background-color: #fefefe;
+    padding: 20px;
+    border: 1px solid #888;
+    width: 90%; /* Reduce width on mobile */
+    max-width: 600px; /* Set a max-width if needed */
+    text-align: center; /* Center the text inside the modal */
+    box-sizing: border-box;
+    max-height: 80vh; /* Limit height to fit better on mobile */
+    overflow-y: auto; /* Enable vertical scrolling if content overflows */
+    position: relative; /* Ensure position relative for close button alignment */
+    margin: auto; /* Center horizontally */
+    display: flex; /* Enable flexbox for centering */
+    flex-direction: column; /* Ensure content flows vertically */
+    justify-content: flex-start; /* Center content vertically */
+    margin-top: 75px; /* Add space from the top */
 }
 
-.modal-content {
-  position: fixed;
-  background-color: #fefefe;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  padding: 20px;
-  border: 1px solid #888;
-  width: 80%; /* Could be more or less, depending on screen size */
-  text-align: center; /* Center the text inside the modal */
-  max-width: 600px; /* Set a max-width if needed */
-  box-sizing: border-box;
-}
+  /* Resize the warning icon image within Modal Content */
+  .disclaimer-modal-content img {
+    width: 100px; /* Adjust as needed */
+    height: auto;
+    margin-bottom: 20px; /* Add some space below the image */
+  }
 
-/* Resize the warning icon image within Modal Content */
-.modal-content img {
-  width: 100px; /* Adjust as needed */
-  height: auto;
-  margin-bottom: 20px; /* Add some space below the image */
-}
+  /* The Close Button */
+  .disclaimer-close {
+    position: absolute;
+    right: 10px;
+    top: 10px;
+    color: #aaa;
+    float: right;
+    font-size: 28px;
+    font-weight: bold;
+  }
 
-/* The Close Button */
-.close {
-  position: absolute;
-  right: 10px;
-  top: 10px;
-  color: #aaa;
-  float: right;
-  font-size: 28px;
-  font-weight: bold;
-}
+  .disclaimer-close:hover,
+  .disclaimer-close:focus {
+    color: black;
+    text-decoration: none;
+    cursor: pointer;
+  }
 
-.close:hover,
-.close:focus {
-  color: black;
-  text-decoration: none;
-  cursor: pointer;
-}
+  /* Adjust the "I Understand" Button Size and Appearance */
+  #understandButton {
+    border-radius: 0;
+    background-color: #5431B2;
+    color: white;
+    border: none;
+    font-size: 16px;
+    width: auto; /* Allow the button to size according to its content */
+    padding: 10px 20px; /* Adjust padding as needed */
+    margin: 20px auto; /* Center the button and add some space above it */
+    display: inline-block; /* Make it inline-block to allow auto width */
+    transition: background-color 0.3s ease;
+  }
 
-/* Adjust the "I Understand" Button Size and Appearance */
-#understandButton {
-  border-radius: 0;
-  background-color: #5431B2;
-  color: white;
-  border: none;
-  font-size: 16px;
-  width: auto; /* Allow the button to size according to its content */
-  padding: 10px 20px; /* Adjust padding as needed */
-  margin: 20px auto; /* Center the button and add some space above it */
-  display: inline-block; /* Make it inline-block to allow auto width */
-  transition: background-color 0.3s ease;
-}
-
-#understandButton:hover, #understandButton:focus {
-  background-color: #FFC617; /* Change color on hover/focus */
-  color: #5431B2; /* Change text color on hover/focus */
-}
-
-
+  #understandButton:hover, #understandButton:focus {
+    background-color: #FFC617; /* Change color on hover/focus */
+    color: #5431B2; /* Change text color on hover/focus */
+  }
 </style>
 {% endblock %}
 
 <!-- Define the content block that will be inserted into the base.html file -->
 {% block content %}
-
 <!-- Disclaimer Modal -->
-<div id="disclaimerModal" class="modal">
-  <div class="modal-content">
-    <span class="close">&times;</span>
+<div id="disclaimerModal" class="disclaimer-modal">
+  <div class="disclaimer-modal-content">
+    <span class="disclaimer-close">&times;</span>
     <img src="{% static 'images/warning_icon.jpg' %}" alt="Warning Icon" style="display: block; margin: auto;">
     <h5>Disclaimer:</h5><br>
-      <p>Thank you for engaging with Audney, your personal virtual financial advisor. While we strive to provide accurate and helpful information, it's important to note that Audney is in an alpha state and at this time is intended for educational, informational and testing purposes only.
-      We strongly advise against solely relying on the advice provided by Audney to make financial decisions. Financial matters can be complex and dynamic, and individual circumstances vary widely. Factors such as personal financial goals, risk tolerance, and market conditions should all be carefully considered before making any decisions.</p><br>
-      <p>The information Audney provides should be used as a supplement to your own research and consultation with qualified financial professionals. It's essential to seek personalized advice tailored to your specific situation before taking any significant financial actions.</p><br>
-      <p>By using Audney as your virtual financial advisor, you acknowledge and agree that we are not liable for any consequences resulting from your reliance on the information provided. We encourage you to use your judgment and discretion when interpreting and applying the advice offered by the virtual financial advisor.</p><br>
-      <p>Remember, financial decisions carry inherent risks, and thorough due diligence is crucial. We appreciate your understanding and cooperation in using Audney responsibly.</p><br>
-
+    <p>Thank you for engaging with Audney, your personal virtual financial advisor. While we strive to provide accurate and helpful information, it's important to note that Audney is in an alpha state and at this time is intended for educational, informational and testing purposes only. We strongly advise against solely relying on the advice provided by Audney to make financial decisions. Financial matters can be complex and dynamic, and individual circumstances vary widely. Factors such as personal financial goals, risk tolerance, and market conditions should all be carefully considered before making any decisions.</p><br>
+    <p>The information Audney provides should be used as a supplement to your own research and consultation with qualified financial professionals. It's essential to seek personalized advice tailored to your specific situation before taking any significant financial actions.</p><br>
+    <p>By using Audney as your virtual financial advisor, you acknowledge and agree that we are not liable for any consequences resulting from your reliance on the information provided. We encourage you to use your judgment and discretion when interpreting and applying the advice offered by the virtual financial advisor.</p><br>
+    <p>Remember, financial decisions carry inherent risks, and thorough due diligence is crucial. We appreciate your understanding and cooperation in using Audney responsibly.</p><br>
     <button id="understandButton" class="btn-send">I Understand</button>
   </div>
 </div>
+
 <!-- Create a container for the chat interface -->
 <div class="chat-container">
   <!-- Create a card for the chat interface -->
   <div class="card flex-grow-1">
     <!-- Create a header for the card with the title 'Audney' -->
     <div class="card-header bg-primary text-white">Audney</div>
-    
+
     <div id="messageWaitIcon">
       <video width="200" height="200" autoplay loop>
         <source src="{% static 'images/messagewait.mp4' %}" type="video/mp4">
         Please Wait...
       </video>
     </div>
+
     <!-- Check if the user is authenticated -->
     {% if user.is_authenticated %}
     <!-- If the user is authenticated, display a welcome message and links to update profile, logout, and support -->
@@ -317,7 +337,7 @@
     <!-- Create a form for sending messages -->
     <form class="message-form">
       <!-- Include the CSRF token for security -->
-      {%csrf_token%}
+      {% csrf_token %}
       <!-- Create an input group for the message input field and send button -->
       <div class="input-group">
         <!-- Create a text input field for the message -->
@@ -329,15 +349,17 @@
       </div>
     </form>
   </div>
-  <!-- Create a script for handling the form submission -->
-  <script>
+</div>
 
-    // Utility function to get CSRF token
-    function getCsrfToken() {
-      return document.cookie.split('; ').find(row => row.startsWith('csrftoken=')).split('=')[1];
-    }
+<!-- Create a script for handling the form submission -->
+<script>
+  // Utility function to get CSRF token
+  function getCsrfToken() {
+    return document.cookie.split('; ').find(row => row.startsWith('csrftoken=')).split('=')[1];
+  }
 
-// Initialize lastMessageId from sessionStorage or set to 0 if not present
+  // Initialize lastMessageId from sessionStorage or set to 0 if not present
+  const lastMessageId = sessionStorage.getItem('lastMessageId') || 0;
 
 
     // Function to fetch chat history

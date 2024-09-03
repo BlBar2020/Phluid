@@ -11,7 +11,7 @@
   <!-- Additional Styles -->
   <style>
   /* The Modal (background) */
-  .modal {
+  .session-timeout-modal {
   display: none; /* Hidden by default */
   position: fixed; /* Stay in place */
   z-index: 1; /* Sit on top */
@@ -26,7 +26,7 @@
   backdrop-filter: blur(50px); /* Frosted glass effect */
 }
 
-.modal-content {
+.session-timeout-modal-content {
   position: fixed;
   background-color: #fefefe;
   top: 50%;
@@ -38,6 +38,7 @@
   text-align: center; /* Center the text inside the modal */
   max-width: 600px; /* Set a max-width if needed */
   box-sizing: border-box;
+  color: #5431B2;
 }
 
 .continueSession-btn {
@@ -68,12 +69,12 @@
   {% block content %}{% endblock %}
 
   <!-- Session Timeout Modal -->
-<div id="sessionTimeoutModal" class="modal">
-  <div class="modal-content">
+<div id="sessionTimeoutModal" class="session-timeout-modal">
+  <div class="session-timeout-modal-content">
     <h2>Session Timeout Warning</h2>
     <p>Due to inactivity your session will timeout in:</p>
     <p id="timeoutTimer" style="font-weight: bold; color: #5431B2; font-size: 20px;">3:00</p>
-    <button id="continueSessionButton" class="continuesession-btn">Continue Session</button>
+    <button id="continueSessionButton" class="continueSession-btn">Continue Session</button>
     <button id="logoutButton" class="logout-btn">Logout</button>
   </div>
 </div>
