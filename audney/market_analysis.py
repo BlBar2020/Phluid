@@ -63,35 +63,32 @@ def update_market_conditions():
         tickers = ['TQQQ', 'SPY', 'X:BTCUSD']
         current_datetime = dt.now()
 
-        # Calculate the last day of the prior month dynamically
-        last_day_of_prior_month = current_datetime.replace(day=1) - timedelta(days=1)
-        # Adjust start_date to be 2 years before the last_day_of_prior_month
-        start_date = last_day_of_prior_month.replace(year=last_day_of_prior_month.year - 2)
-        start_date_str = start_date.strftime('%Y-%m-%d')
-        end_date_str = last_day_of_prior_month.strftime('%Y-%m-%d')
+        # Define the start and end dates for the last five years
+        start_date = current_datetime - timedelta(days=5 * 365)
+        end_date = current_datetime
 
         for ticker in tickers:
-            url = f'https://api.polygon.io/v2/aggs/ticker/{ticker}/range/1/day/{start_date_str}/{end_date_str}?adjusted=true&sort=asc&apiKey={settings.POLYGON_API_KEY}'
-            response = requests.get(url)
-            if response.status_code == 200:
-                json_data = response.json()
-                if 'results' in json_data and len(json_data['results']) > 0:
-                    data = pd.DataFrame(json_data['results'])
-                    data.rename(columns={'c': 'Close'}, inplace=True)
+            # Fetch data using yfinance
+            data = yf.download(ticker, start=start_date, end=end_date)
 
-                    # Check for NaNs after pct_change and fill or drop them
-                    data['Returns'] = data['Close'].pct_change().fillna(0)
+            if not data.empty:
+                # Ensure the 'Close' column is available
+                data = data[['Close']]
 
-                    # Check for NaNs and Infs in 'Cumulative_Returns'
-                    data['Cumulative_Returns'] = (1 + data['Returns']).cumprod().replace([np.inf, -np.inf], 0) - 1
+                # Calculate daily returns
+                data['Returns'] = data['Close'].pct_change().fillna(0)
 
-                    latest_cumulative_return = data['Cumulative_Returns'].iloc[-1]
-                    current_market_condition = classify_market(latest_cumulative_return)
-                    MarketCondition.objects.update_or_create(ticker=ticker, defaults={'condition': current_market_condition})
-                else:
-                    logger.error(f"No or empty data returned for ticker {ticker}. Response: {response.text}")
+                # Calculate cumulative returns
+                data['Cumulative_Returns'] = (1 + data['Returns']).cumprod() - 1
+
+                # Classify the market based on the latest cumulative return
+                latest_cumulative_return = data['Cumulative_Returns'].iloc[-1]
+                current_market_condition = classify_market(latest_cumulative_return)
+                
+                # Update or create the market condition in the database
+                MarketCondition.objects.update_or_create(ticker=ticker, defaults={'condition': current_market_condition})
             else:
-                logger.error(f"Failed to fetch data for {ticker}: {response.text}")
+                logger.error(f"No data returned for ticker {ticker}.")
     except Exception as e:
         logger.error(f"Error updating market conditions: {e}")
 
