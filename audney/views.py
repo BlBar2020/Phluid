@@ -42,24 +42,45 @@ from .market_analysis import get_stock_price, search_company_or_ticker, calculat
 from django.core.mail import send_mail
 from django.core.mail import EmailMessage
 from .forms import SupportForm
+import pandas as pd
+import requests
 
 # Import OpenAI module
-import openai
+from openai import OpenAI
+
+client = OpenAI(api_key=os.getenv('OPENAI_API_KEY'))
 
 # Get a logger instance
 logger = logging.getLogger(__name__)
 
+# Fetch Market News
+def get_market_news():
+    url = f"https://www.alphavantage.co/query?function=NEWS_SENTIMENT&apikey={os.getenv('ALPHA_VANTAGE_API_KEY')}"
+    response = requests.get(url)
+    if response.status_code == 200:
+        news_data = response.json()
+        if 'feed' in news_data:
+            return pd.DataFrame(news_data['feed'])  # Convert news feed to a Pandas DataFrame
+        else:
+            print("No market news found.")
+            return None
+    else:
+        print(f"Error fetching news: {response.status_code}")
+        return None
+# Analyze Market News
+def analyze_market_news(news_df):
+    # Example: Filter by relevance score or sentiment, using top 5
+    return news_df.head(5) if 'summary' in news_df.columns else None
 
+# Call OpenAI API for personalized advice
 def ask_openai(user_input, user):
 
-    # Set the API key for OpenAI client
-    client = openai.OpenAI(api_key=settings.OPENAI_API_KEY)
-    
-    # Updating and gathering context as before
+    # Update market conditions
     update_market_conditions()
     market_conditions = MarketCondition.objects.all()
     market_conditions_str = '\n'.join([f"Currently, '{mc.ticker}' seems to be in a {mc.condition} market." for mc in market_conditions])
 
+    # Gather user financial profile
     user_profile = user.userprofile
     user_age = calculate_user_age(user_profile.date_of_birth)
     user_financial_goal = user_profile.financial_goals
@@ -69,58 +90,46 @@ def ask_openai(user_input, user):
                               f"Savings Coverage: {user_profile.get_savings_months_display()}."
     user_context = f"I am {user_age} years old. My financial goal is {user_financial_goal}. {additional_user_details}"
 
-    # Refine the system message to guide the model
+    # Fetch and summarize market news
+    news_df = get_market_news()
+    if news_df is not None:
+        analyzed_news = analyze_market_news(news_df)
+        if analyzed_news is not None:
+            news_summary = "\n".join(analyzed_news['summary'].tolist())  # Summarize news
+        else:
+            news_summary = "No relevant market news available."
+    else:
+        news_summary = "No market news could be fetched."
+
+    # System message to guide the AI model
     system_message = (
         f"Here is some market data: {market_conditions_str}. "
         f"The user has the following financial profile: {user_context}. "
+        f"Additionally, here are the latest market news updates: {news_summary}. "
         "When responding, consider this user's financial goals, risk tolerance, and market data to provide personalized advice. "
         "Your tone should be friendly, supportive, and informative, much like a personal financial advisor who is also a friend."
     )
 
     try:
         # Sending the chat completion request
-        chat_completion = client.chat.completions.create(
-            model="gpt-4",
-            messages=[
-                {"role": "system", "content": "You are a professional, emotionally intelligent, and friendly financial advisor named Audney. Your goal is to educate the user on their finances and provide tailored advice."},
-                {"role": "system", "content": system_message},
-                {"role": "user", "content": user_input}
-            ]
-        )
+        chat_completion = client.chat.completions.create(model="gpt-4",
+        messages=[
+            {"role": "system", "content": "You are a professional, emotionally intelligent, and friendly financial advisor named Audney. Your goal is to educate the user on their finances and provide tailored advice."},
+            {"role": "system", "content": system_message},
+            {"role": "user", "content": user_input}
+        ])
 
-        logger.debug(f"OpenAI API Response: {chat_completion}")
-        # Assuming chat_completion returns a response with a 'choices' attribute
+        # Handle the API response
         if chat_completion.choices:
             answer = chat_completion.choices[0].message.content.strip()
-            logger.debug(f"OpenAI API Answer: {answer}")
-
-            contains_html = (strip_tags(answer) != answer)
-
-            if user.is_authenticated:
-                recent_time_threshold = timezone.now() - timedelta(seconds=5)
-                existing_message = AudneyMessage.objects.filter(
-                    user=user,
-                    message=answer,
-                    created_at__gte=recent_time_threshold
-                ).exists()
-
-                if not existing_message:
-                    AudneyMessage.objects.create(
-                        user=user,
-                        user_query=user_input,
-                        message=answer,
-                        contains_html=contains_html,
-                        message_type='audney',
-                    )
-                else:
-                    logger.info("Duplicate message detected, not saving.")
             return answer
         else:
-            return "No response from API"
+            return "No response from OpenAI."
 
     except Exception as e:
-        logger.error(f"Error calling OpenAI API: {e}")
+        print(f"Error calling OpenAI: {e}")
         return "An error occurred while processing your request."
+
 
 @require_http_methods(["GET", "POST"])
 def chatbot_response(request):
@@ -150,7 +159,7 @@ def chatbot_response(request):
         )
 
     # Check if the query is about stock price
-    if any(keyword in user_input.lower() for keyword in ['stock', 'price', 'ticker', 'how much']):
+    if any(keyword in user_input.lower() for keyword in ['price', 'ticker', 'how much']):
         company_name_or_symbol = extract_company_name(user_input)
         possible_matches = search_company_or_ticker(company_name_or_symbol)
         if len(possible_matches) == 1:
@@ -193,7 +202,7 @@ def chatbot_response(request):
             # Assuming user_input, user, and answer are available
             recent_time_threshold = timezone.now() - timedelta(seconds=5)  # Adjust the timedelta as needed
             existing_message = AudneyMessage.objects.filter(
-             user=request.user,
+                user=request.user,
                 message=response_message,
                 created_at__gte=recent_time_threshold
             ).exists()
@@ -232,13 +241,14 @@ def chatbot_response(request):
             else:
                 logger.info("Duplicate message detected, not saving.")
     else:
+        # Handle investment strategy or general queries using OpenAI API
         response = ask_openai(user_input, request.user)
         response_message = response if response else "Sorry, I couldn't understand your query."
         contains_html = False
 
         logger.debug(f"contains_html value: {contains_html}")  # Assuming contains_html is the variable holding the value
 
-
+        # Check if a similar response has been generated recently
         recent_time_threshold = timezone.now() - timedelta(seconds=5)  # Adjust the timedelta as needed
         existing_message = AudneyMessage.objects.filter(
             user=request.user,

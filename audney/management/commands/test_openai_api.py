@@ -17,7 +17,6 @@ class Command(BaseCommand):
 
         try:
             # Ensure the API key is set
-            openai.api_key = settings.OPENAI_API_KEY
 
             # Make a simple API call to test
             response = client.chat.completions.create(

@@ -40,11 +40,10 @@ def get_stock_price(ticker_symbol):
             formatted_price = "${:.2f}".format(price)
             return formatted_price
         else:
-            return "Stock data not available for the given ticker."
+            return f"Stock data not available for {ticker_symbol}. It may be inactive or delisted."
     except Exception as e:
         logger.error(f"Error fetching stock price for {ticker_symbol}: {e}")
         return f"Error fetching stock price: {e}"
-
 
 def classify_market(row, threshold=0.20):
     try:
@@ -110,17 +109,13 @@ def extract_stock_symbol_with_nlp(text):
         logger.error(f"Error in NLP extraction with chat model: {e}")
         return None
 
-
 # Function to get ticker symbol from a company name
 def get_ticker_symbol_from_name(company_name):
     try:
         url = f"https://api.polygon.io/v3/reference/tickers?search={company_name}&active=true&sort=ticker&order=asc&limit=10&apiKey={polygon_api_key}"
-        # Send a GET request to the API
         response = requests.get(url)
         if response.status_code == 200:
-            # Parse the JSON response
             data = response.json()
-            # Extract the company names and ticker symbols from the response
             matches = [(ticker_info.get('name', ''), ticker_info.get('ticker', '')) for ticker_info in data.get('results', [])]
             return matches
         else:
@@ -130,18 +125,17 @@ def get_ticker_symbol_from_name(company_name):
         logger.error(f"Error in get_ticker_symbol_from_name function: {e}")
         return []
 
-
-
 # Function to extract a company name from a text string
+# Function to extract a clean company name or ticker symbol from user input
 def extract_company_name(text):
     try:
         client = OpenAI(api_key=settings.OPENAI_API_KEY)
         if not text:
             logger.warning("Input text is empty.")
-            return "Input text is empty."
+            return None
 
         messages = [
-            {"role": "system", "content": "Extract the company name and its ticker symbol from the text."},
+            {"role": "system", "content": "Extract the company name or ticker symbol from the text."},
             {"role": "user", "content": text}
         ]
 
@@ -150,35 +144,48 @@ def extract_company_name(text):
             messages=messages
         )
 
-        # Ensure that we are accessing the response correctly
         if response.choices:
-            # Access the message content properly; use .get if unsure about the structure
-            message_content = response.choices[0].message.content.strip() if hasattr(response.choices[0].message, 'content') else "No content found"
-
-            logger.info(f"Extracted text: {message_content}")
-            return message_content
+            message_content = response.choices[0].message.content.strip()
+            logger.info(f"Extracted company name or ticker symbol: {message_content}")
+            
+            # Ensure we return only the name or ticker, not a descriptive string
+            extracted_text = message_content.split(':')[-1].strip()  # Assume format is "Company name: Apple"
+            return extracted_text
         else:
-            logger.warning("No results were found.")
-            return "No results found."
+            logger.warning("No company name or ticker symbol found.")
+            return None
 
     except Exception as e:
         logger.error(f"Failed to extract company name: {e}")
         return None
 
-
-
-
-# Function to search for a company or ticker symbol
+# Function to search for a company or ticker symbol with prioritized matches
 def search_company_or_ticker(query):
     try:
+        # Ensure the extracted query is valid and clean
         extracted_query = extract_company_name(query)
         if not extracted_query:
             return []
+        
+        # Send the cleaned-up query to the Polygon API
         url = f"https://api.polygon.io/v3/reference/tickers?search={extracted_query}&apiKey={polygon_api_key}"
         response = requests.get(url)
+
         if response.status_code == 200:
             data = response.json()
-            possible_matches = [(result['name'], result['ticker']) for result in data.get('results', []) if result.get('name') and result.get('ticker')]
+
+            # Filter the results based on whether the company name or ticker symbol contains the query (case-insensitive)
+            possible_matches = [
+                (result['name'], result['ticker']) 
+                for result in data.get('results', []) 
+                if extracted_query.lower() in result['name'].lower() or extracted_query.lower() in result['ticker'].lower()
+            ]
+            
+            # Return an exact match if one exists, otherwise return the filtered possible matches
+            exact_matches = [match for match in possible_matches if extracted_query.lower() == match[0].lower()]
+
+            if len(exact_matches) == 1:
+                return exact_matches[0]  # Return the exact match
             return possible_matches if possible_matches else []
         else:
             logger.error(f"Error searching for company/ticker: {response.text}")
@@ -187,3 +194,28 @@ def search_company_or_ticker(query):
         logger.error(f"Error searching for company/ticker: {e}")
         return []
 
+# Function to handle stock price queries
+def handle_stock_price_query(user_input):
+    company_name_or_symbol = extract_company_name(user_input)
+    possible_matches = search_company_or_ticker(company_name_or_symbol)
+
+    if isinstance(possible_matches, tuple):
+        # Only one result, return stock price
+        company_name, ticker_symbol = possible_matches
+        stock_price = get_stock_price(ticker_symbol)
+        response_message = f"Currently, {company_name} ({ticker_symbol}) is priced at {stock_price}."
+        contains_html = False
+    else:
+        # Multiple matches or no match
+        if len(possible_matches) > 1:
+            response_message = "I found multiple companies with that name, please choose the one you're referring to: "
+            response_message += "<ul>"
+            for name, ticker in possible_matches:
+                response_message += f"<li><a href='#' onclick='fetchStockPrice(\"{ticker}\", \"{name}\")'>{name} ({ticker})</a></li>"
+            response_message += "</ul>"
+            contains_html = True
+        else:
+            response_message = "Sorry, I couldn't find the stock price for the company you mentioned."
+            contains_html = False
+
+    return response_message, contains_html
