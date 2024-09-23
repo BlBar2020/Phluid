@@ -426,22 +426,40 @@
     // Function to handle message sending
     function sendMessage(message) {
       const payload = { message: message };
+
+      // Use setTimeout to delay the fetch call to handle potential race conditions
+      setTimeout(() => {
+          fetch(`/chat/response/`, {
+              method: 'POST',
+              headers: {
+                  'Content-Type': 'application/json',
+                  'X-CSRFToken': getCsrfToken(),
+              },
+              body: JSON.stringify(payload)
+          })
+          .then(response => response.json())
+          .then(data => {
+              console.log('Received message: ', data.message);  // Debugging
+            
+              // Check if the response message is valid
+              if (data.message) {
+                  displayMessage(data.message, 'received'); // Display response as a received message
+              } else {
+                  console.error('Error: received empty message.');
+                  displayMessage('An error occurred. Please try again later.', 'received'); // Display an error message if response is empty
+              }
+          })
+          .catch(error => {
+              console.error('Error sending message:', error);
+              displayMessage('An error occurred. Please try again later.', 'received'); // Display a generic error message
+          })
+          .finally(() => {
+              // Hide the loading indicator
+              messageWaitIcon.style.display = 'none';
+          });
+      }, 500);  // Delay of 500ms
+  }
   
-      fetch(`/chat/response/`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-CSRFToken': getCsrfToken(),
-        },
-        body: JSON.stringify(payload)
-      })
-      .then(response => response.json())
-      .then(data => {
-        displayMessage(data.message, 'received'); // Display response as a received message
-      })
-      .catch(error => console.error('Error sending message:', error))
-      .finally(() => messageWaitIcon.style.display = 'none');
-    }
   
     // Function to fetch and display stock price
     function fetchStockPrice(symbol, companyName) {

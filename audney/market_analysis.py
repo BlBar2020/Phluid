@@ -83,7 +83,7 @@ def update_market_conditions():
                 # Classify the market based on the latest cumulative return
                 latest_cumulative_return = data['Cumulative_Returns'].iloc[-1]
                 current_market_condition = classify_market(latest_cumulative_return)
-                
+
                 # Update or create the market condition in the database
                 MarketCondition.objects.update_or_create(ticker=ticker, defaults={'condition': current_market_condition})
             else:
@@ -147,7 +147,7 @@ def extract_company_name(text):
         if response.choices:
             message_content = response.choices[0].message.content.strip()
             logger.info(f"Extracted company name or ticker symbol: {message_content}")
-            
+
             # Ensure we return only the name or ticker, not a descriptive string
             extracted_text = message_content.split(':')[-1].strip()  # Assume format is "Company name: Apple"
             return extracted_text
@@ -166,7 +166,7 @@ def search_company_or_ticker(query):
         extracted_query = extract_company_name(query)
         if not extracted_query:
             return []
-        
+
         # Send the cleaned-up query to the Polygon API
         url = f"https://api.polygon.io/v3/reference/tickers?search={extracted_query}&apiKey={polygon_api_key}"
         response = requests.get(url)
@@ -176,11 +176,11 @@ def search_company_or_ticker(query):
 
             # Filter the results based on whether the company name or ticker symbol contains the query (case-insensitive)
             possible_matches = [
-                (result['name'], result['ticker']) 
-                for result in data.get('results', []) 
+                (result['name'], result['ticker'])
+                for result in data.get('results', [])
                 if extracted_query.lower() in result['name'].lower() or extracted_query.lower() in result['ticker'].lower()
             ]
-            
+
             # Return an exact match if one exists, otherwise return the filtered possible matches
             exact_matches = [match for match in possible_matches if extracted_query.lower() == match[0].lower()]
 
@@ -197,12 +197,17 @@ def search_company_or_ticker(query):
 # Function to handle stock price queries
 def handle_stock_price_query(user_input):
     company_name_or_symbol = extract_company_name(user_input)
+    logger.info(f"Extracted company name or symbol: {company_name_or_symbol}")
+
     possible_matches = search_company_or_ticker(company_name_or_symbol)
+    logger.info(f"Possible matches found: {possible_matches}")
 
     if isinstance(possible_matches, tuple):
         # Only one result, return stock price
         company_name, ticker_symbol = possible_matches
         stock_price = get_stock_price(ticker_symbol)
+        logger.info(f"Stock price for {company_name} ({ticker_symbol}): {stock_price}")
+        
         response_message = f"Currently, {company_name} ({ticker_symbol}) is priced at {stock_price}."
         contains_html = False
     else:
@@ -217,5 +222,7 @@ def handle_stock_price_query(user_input):
         else:
             response_message = "Sorry, I couldn't find the stock price for the company you mentioned."
             contains_html = False
+
+    logger.info(f"Final response message: {response_message}, Contains HTML: {contains_html}")
 
     return response_message, contains_html

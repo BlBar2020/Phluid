@@ -162,12 +162,16 @@ def chatbot_response(request):
     if any(keyword in user_input.lower() for keyword in ['price', 'ticker', 'how much']):
         company_name_or_symbol = extract_company_name(user_input)
         possible_matches = search_company_or_ticker(company_name_or_symbol)
+
         if len(possible_matches) == 1:
             # If exactly one match is found, fetch the stock price
             company_name, ticker_symbol = possible_matches[0]
             stock_price = get_stock_price(ticker_symbol)
             ticker_quote = f"Currently, {company_name} ({ticker_symbol}) is priced at {stock_price}."
             contains_html = False
+
+            # Delay to prevent race condition
+            time.sleep(1)
 
             recent_time_threshold = timezone.now() - timedelta(seconds=5)  # Adjust as needed
             existing_response = StockPriceResponse.objects.filter(
@@ -188,16 +192,18 @@ def chatbot_response(request):
             else:
                 logger.info("Duplicate stock response detected, not saving.")
 
+            response_message = ticker_quote
 
         elif len(possible_matches) > 1:
             # If multiple matches are found, prompt the user to choose
             response_message = "I found multiple companies with that name, please choose the one you're referring to: "
+            response_message += "<ul>"
             for name, ticker in possible_matches:
                 response_message += f"<li><a href='#' onclick='fetchStockPrice(\"{ticker}\", \"{name}\")'>{name} ({ticker})</a></li>"
             response_message += "</ul>"
             contains_html = True
 
-            logger.debug(f"contains_html value: {contains_html}")  # Assuming contains_html is the variable holding the value
+            logger.debug(f"contains_html value: {contains_html}")
 
             # Assuming user_input, user, and answer are available
             recent_time_threshold = timezone.now() - timedelta(seconds=5)  # Adjust the timedelta as needed
@@ -222,7 +228,7 @@ def chatbot_response(request):
             response_message = "Sorry, I couldn't find the stock price for the company you mentioned."
             contains_html = False
 
-            logger.debug(f"contains_html value: {contains_html}")  # Assuming contains_html is the variable holding the value
+            logger.debug(f"contains_html value: {contains_html}")
             recent_time_threshold = timezone.now() - timedelta(seconds=5)  # Adjust the timedelta as needed
             existing_message = AudneyMessage.objects.filter(
                 user=request.user,
@@ -246,7 +252,7 @@ def chatbot_response(request):
         response_message = response if response else "Sorry, I couldn't understand your query."
         contains_html = False
 
-        logger.debug(f"contains_html value: {contains_html}")  # Assuming contains_html is the variable holding the value
+        logger.debug(f"contains_html value: {contains_html}")
 
         # Check if a similar response has been generated recently
         recent_time_threshold = timezone.now() - timedelta(seconds=5)  # Adjust the timedelta as needed
