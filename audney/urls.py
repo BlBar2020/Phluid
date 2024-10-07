@@ -1,4 +1,4 @@
-from django.urls import path, include
+from django.urls import path
 from .views import get_chat_history
 from .views import audney, chatbot_response, login, register, logout, get_stock_price_view, update_profile, support, support_success
 

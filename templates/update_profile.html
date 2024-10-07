@@ -1,7 +1,6 @@
 <!-- Extend the base HTML layout -->
 {% extends 'base.html' %}
 
-<!-- Load custom template filters -->
 {% load extra_filters %}
 
 <!-- Define the content block -->
@@ -13,6 +12,7 @@
         height: 100%;
         margin: 0;
     }
+
     /* Style the container for the profile update form */
     .update-profile-container {
         margin: 0 auto;
@@ -23,8 +23,8 @@
     .update-profile-card {
         background-color: #f0f0f0;
         border: 1px solid #ccc;
-        border-radius: 4px;
-        box-shadow: 0 2px 4px rgba (0, 0, 0, 0.1);
+        border-radius: 12px; /* Slightly larger border-radius for the card */
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
         margin-bottom: 20px;
     }
 
@@ -42,52 +42,61 @@
         padding: 20px;
     }
 
-    /* Style the submit button */
-    .submit-btn {
-        border-radius: 0;
-        background-color: #5431B2;
-        color: white;
-        border: none;
-    }
-
-    /* Change the submit button color on hover */
-    .submit-btn:hover {
-        background-color: #FFC617;
-        color: #5431B2;
-    }
-
-    /* Style the close button */
-    .close-btn {
-        border-radius: 0;
-        background-color: #5431B2;
-        color: white;
-        border: none;
-    }
-
-    /* Change the close button color on hover */
-    .close-btn:hover {
-        background-color: #FFC617;
-        color: #5431B2;
-    }
-
-    .border {
-        border-top: 2px solid #ccc; /* Thick gray line */
-        margin: 20px 0; /* Spacing above and below the separator */
-    }
-
-    .update-profile-header-link {
-        color: #FFC617;
-        text-decoration: none;
+    /* Ensure all form fields span the full width and have more rounded corners */
+    .form-control {
+        width: 100%;
+        padding: 12px;
         font-size: 16px;
+        border: 1px solid #ccc;
+        border-radius: 30px; /* Larger border-radius for more oval shape */
+        margin-bottom: 15px;
     }
 
-    .separator {
+    .helptext {
+        font-size: 12px;
+        color: #666;
+        margin-top: -10px;
+        margin-bottom: 15px;
+    }
+
+    /* Buttons container for placing buttons next to each other */
+    .form-buttons {
+        display: flex;
+        justify-content: flex-start; /* Align buttons next to each other */
+        gap: 5px; /* Add 5px space between buttons */
+        margin-top: 20px;
+    }
+
+    /* Style the submit and close buttons with rounded corners */
+    .submit-btn, .close-btn {
+        background-color: #5431B2;
         color: white;
-        margin: 0 10px;
+        border: none;
+        padding: 10px 20px;
+        font-size: 16px;
+        border-radius: 30px;  /* Larger rounded corners for buttons */
+        text-align: center;
+        cursor: pointer;
+    }
+
+    /* Ensure buttons don't span across the entire page */
+    .submit-btn, .close-btn {
+        width: auto;
+    }
+
+    /* Change button color on hover */
+    .submit-btn:hover, .close-btn:hover {
+        background-color: #FFC617;
+        color: #5431B2;
+    }
+
+    /* Password requirements style with additional padding */
+    #passwordRequirements {
+        margin-bottom: 20px;
     }
 
     #passwordRequirements p {
-        color: red; /* Default color indicating unmet requirement */
+        color: red;
         margin: 0;
         font-size: 14px;
     }
@@ -96,159 +105,81 @@
 <!-- Profile update form -->
 <div class="update-profile-card">
     <div class="update-profile-card-header">Update Profile</div>
-    <div class="update-profile-card-header">
-        <!-- Links for Logout and Support, with separators -->
-        <a href="{% url 'logout' %}" class="header-link">Logout</a>
-        <span class="separator">|</span>
-        <a href="{% url 'support' %}?from=update_profile" class="update-profile-header-link">Support</a>
-      </div>
-    </div>
     <div class="update-profile-card-body">
         <!-- Start the form, set method to POST and disable autocomplete -->
         <form method="post" autocomplete="off">
             <!-- Add CSRF token for security -->
             {% csrf_token %}
-            <!-- Display user's current first name, last name, and date of birth -->
+
+            <!-- Display user's current first name, last name, and date of birth (read-only) -->
             <p>First Name: {{ user.first_name }}</p>
             <p>Last Name: {{ user.last_name }}</p>
-            <p>Date of Birth: {{ user.userprofile.date_of_birth|date:"Y-m-d" }}</p>
+            <p>Date of Birth: {{ date_of_birth|date:"Y-m-d" }}</p>
 
-            <!-- Input field for new username -->
-        <div class="form-group">
-            <label for="new_username">New Username (leave blank to keep current)</label>
-            <input type="text" class="form-control" id="new_username" name="new_username" placeholder="{{ user.username }}">
-        </div>
-
-        <!-- Input field for new email -->
-        <div class="form-group">
-            <label for="new_email">New Email (leave blank to keep current)</label>
-            <input type="email" class="form-control" id="new_email" name="new_email" placeholder="{{ user.email }}">
-        </div>
-
-        <!-- Separator line -->
-        <div class="border"></div>
-        
-        <!-- Password requirements -->
-        <div id="passwordRequirements">
-            <p id="reqSpecialChar">Contains a special character (e.g., !@#$%^&*)</p>
-            <p id="reqCapitalLetter">Contains a capital letter</p>
-            <p id="reqNumber">Contains a number</p>
-            <p id="passwordMatchMessage">Passwords match.</p>
-        </div>
-
-        
-
-
-        <!-- Input field for new password -->
-        <div class="form-group">
-            <label for="new_password1">New Password (leave blank to keep current)</label>
-            <input type="password" class="form-control" id="new_password1" name="new_password1" placeholder="Enter new password">
-        </div>
-
-        <!-- Input field for confirming new password -->
-        <div class="form-group">
-            <label for="new_password2">Confirm New Password</label>
-            <input type="password" class="form-control" id="new_password2" name="new_password2" placeholder="Confirm new password">
-        </div>
-
-        <!-- Separator line -->
-            <div class="border"></div>
-
-            <!-- Additional fields for the update profile form -->
+            <!-- Full-width username field -->
             <div class="form-group">
-                <label for="risk_tolerance">Risk Tolerance</label>
-                <select class="form-control" id="risk_tolerance" name="risk_tolerance">
-                    <option value="aggressive" {% if user.userprofile.risk_tolerance == "aggressive" %}selected{% endif %}>Aggressive</option>
-                    <option value="moderate" {% if user.userprofile.risk_tolerance == "moderate" %}selected{% endif %}>Moderate</option>
-                    <option value="conservative" {% if user.userprofile.risk_tolerance == "conservative" %}selected{% endif %}>Conservative</option>
-                </select>
+                {{ user_form.username.label_tag }}
+                {{ user_form.username|add_class:"form-control" }}
+                <div class="helptext">{{ user_form.username.help_text }}</div>
+            </div>
+
+            <!-- Full-width email field -->
+            <div class="form-group">
+                {{ user_form.email.label_tag }}
+                {{ user_form.email|add_class:"form-control" }}
+            </div>
+
+            <!-- Full-width password fields -->
+            <div class="form-group">
+                {{ user_form.password1.label_tag }}
+                {{ user_form.password1|add_class:"form-control" }}
             </div>
 
             <div class="form-group">
-                <label for="income_level">Income Level</label>
-                <select class="form-control" id="income_level" name="income_level">
-                    <option value="55001_89000" {% if user.userprofile.income_level == "55001_89000" %}selected{% endif %}>$55,001 - $89,000</option>
-                    <option value="89001_150000" {% if user.userprofile.income_level == "89001_150000" %}selected{% endif %}>$89,001 - $150,000</option>
-                    <option value="150001_plus" {% if user.userprofile.income_level == "150001_plus" %}selected{% endif %}>$150,001+</option>
-                </select>
+                {{ user_form.password2.label_tag }}
+                {{ user_form.password2|add_class:"form-control" }}
             </div>
 
-            <div class="form-group">
-                <label for="has_dependents">Do you have any dependents?</label>
-                <select class="form-control" id="has_dependents" name="has_dependents">
-                    <option value="yes" {% if user.userprofile.has_dependents == "yes" %}selected{% endif %}>Yes</option>
-                    <option value="no" {% if user.userprofile.has_dependents == "no" %}selected{% endif %}>No</option>
-                </select>
+            <!-- Password requirements displayed directly under password fields -->
+            <div id="passwordRequirements">
+                <p id="reqSpecialChar">Contains a special character (e.g., !@#$%^&*)</p>
+                <p id="reqCapitalLetter">Contains a capital letter</p>
+                <p id="reqNumber">Contains a number</p>
+                <p id="passwordMatchMessage">Passwords match.</p>
             </div>
 
-            <div class="form-group">
-                <label for="savings_months">How many months of income do you have in your emergency savings?</label>
-                <select class="form-control" id="savings_months" name="savings_months">
-                    <option value="3_months" {% if user.userprofile.savings_months == "3_months" %}selected{% endif %}>3 months</option>
-                    <option value="6_months" {% if user.userprofile.savings_months == "6_months" %}selected{% endif %}>6 months</option>
-                    <option value="9_months" {% if user.userprofile.savings_months == "9_months" %}selected{% endif %}>9 months</option>
-                    <option value="12_months" {% if user.userprofile.savings_months == "12_months" %}selected{% endif %}>12 months</option>
-                </select>
+            <!-- Render profile form fields (city, state, financial goals, etc.) with custom labels -->
+            {{ profile_form.as_p }}
+
+            <!-- Form buttons (submit and close) displayed side by side with 5px gap -->
+            <div class="form-buttons">
+                <button type="submit" class="submit-btn">Update Profile</button>
+                <button type="button" class="close-btn" onclick="window.location.href='/'">Close</button>
             </div>
-
-        <!-- Dropdown for selecting financial goal -->
-        <div class="form-group">
-            <label for="financial_goals">Financial Goal</label>
-            <select class="form-control" id="financial_goals" name="financial_goals">
-                <!-- Options for financial goals, with current goal pre-selected -->
-                <option value="budgeting" {% if user.userprofile.financial_goals|is_equal_to:"budgeting" %}selected{% endif %}>Budgeting</option>
-                <option value="debt management" {% if user.userprofile.financial_goals|is_equal_to:"debt_management" %}selected{% endif %}>Debt Management</option>
-                <option value="insurance planning" {% if user.userprofile.financial_goals|is_equal_to:"insurance_planning" %}selected{% endif %}>Insurance Planning</option>
-                <option value="investment manaement" {% if user.userprofile.financial_goals|is_equal_to:"investment_management" %}selected{% endif %}>Investment Management</option>
-                <option value="retirement planning" {% if user.userprofile.financial_goals|is_equal_to:"retirement_planning" %}selected{% endif %}>Retirement Planning</option>
-                <option value="tax planning" {% if user.userprofile.financial_goals|is_equal_to:"tax_planning" %}selected{% endif %}>Tax Planning</option>
-                <option value="estate planning" {% if user.userprofile.financial_goals|is_equal_to:"estate_planning" %}selected{% endif %}>Estate Planning</option>
-                <option value="wealth management" {% if user.userprofile.financial_goals|is_equal_to:"wealth_management" %}selected{% endif %}>Wealth Management</option>
-                <!-- More options... -->
-            </select>
-        </div>
-
-        <!-- Submit button for the form -->
-        <button type="submit" class="submit-btn">Update Profile</button>
-        <!-- Close button, redirects to home page -->
-        <button type="button" class="close-btn" onclick="window.location.href='/'">Close</button>
-
-    </form>
+        </form>
+    </div>
 </div>
 
+<!-- Script to handle password strength and matching -->
 <script>
-    // Define the function to check password strength and match
     function checkPasswordStrengthAndMatch() {
-        // Get the password values from the form
-        const password = document.getElementById("new_password1").value;
-        const confirmPassword = document.getElementById("new_password2").value;
+        const password = document.getElementById("id_password1").value;
+        const confirmPassword = document.getElementById("id_password2").value;
 
-        // Get the elements that display the password requirements
         const reqSpecialChar = document.getElementById("reqSpecialChar");
         const reqCapitalLetter = document.getElementById("reqCapitalLetter");
         const reqNumber = document.getElementById("reqNumber");
         const passwordMatchMessage = document.getElementById("passwordMatchMessage");
 
-        // Check if the password contains a special character
         reqSpecialChar.style.color = /[!@#$%^&*(),.?":{}|<>]/.test(password) ? 'green' : 'red';
-
-        // Check if the password contains a capital letter
         reqCapitalLetter.style.color = /[A-Z]/.test(password) ? 'green' : 'red';
-
-        // Check if the password contains a number
         reqNumber.style.color = /[0-9]/.test(password) ? 'green' : 'red';
-
-        // Check if passwords match
         passwordMatchMessage.style.color = password === confirmPassword ? 'green' : 'red';
         passwordMatchMessage.textContent = password === confirmPassword ? 'Passwords match.' : 'Passwords do not match.';
     }
 
-    // Add event listeners to the password and confirm password fields
-    document.getElementById("new_password1").addEventListener("keyup", checkPasswordStrengthAndMatch);
-    document.getElementById("new_password2").addEventListener("keyup", checkPasswordStrengthAndMatch);
+    document.getElementById("id_password1").addEventListener("keyup", checkPasswordStrengthAndMatch);
+    document.getElementById("id_password2").addEventListener("keyup", checkPasswordStrengthAndMatch);
 </script>
 
-
-
-<!-- End of content block -->
 {% endblock %}

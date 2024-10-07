@@ -1,296 +1,240 @@
 <!-- Extend the base template -->
 {% extends 'base.html' %}
 
-<!-- Define the title block -->
-{% block title %}Register{% endblock %}
+{% load extra_filters %}
 
-<!-- Define the styles block -->
-{% block styles %}
-<style>
-  /* Set the background color of the body */
-  body {
-    background-color: #f0f0f0;
-  }
-
-  /* Style the register container */
-  .register-container {
-    display: flex;
-    justify-content: center;
-    align-items: start;
-    height: 100vh;
-    /* Full height of the viewport */
-  }
-
-  /* Limit the maximum width of the card */
-  .card {
-    max-width: 400px;
-  }
-
-  /* Style the card header */
-  .card-header {
-    background-color: #5431B2;
-    color: white;
-    font-size: 24px;
-    font-weight: bold;
-    text-align: center;
-    margin-top: 0px;
-  }
-
-  /* Add padding to the card body */
-  .card-body {
-    padding: 30px;
-    max-height: calc(100vh - 100px);
-    overflow-y: auto;
-  }
-
-  /* Add margin to the form group */
-  .form-group {
-    margin-bottom: 20px;
-  }
-
-  /* Style the label */
-  label {
-    font-weight: bold;
-    display: block;
-    margin-bottom: 5px;
-  }
-
-  /* Style the input fields */
-  input[type=text],
-  input[type=password],
-  input[type=date],
-  select {
-    border-radius: 4px;
-    border: 1px solid #ccc;
-    padding: 10px;
-    font-size: 16px;
-    width: 100%;
-    box-sizing: border-box;
-    margin-bottom: 10px;
-  }
-
-  /* Style the submit button */
-  button[type=submit] {
-    background-color: #5431B2;
-    color: white;
-    font-size: 16px;
-    font-weight: bold;
-    padding: 10px 20px;
-    border: none;
-    border-radius: 4px;
-    cursor: pointer;
-    width: 100%;
-  }
-
-  /* Change the color of the submit button on hover */
-  button[type=submit]:hover {
-    background-color: #FFC617;
-    color: #5431B2;
-  }
-
-  /* Style the alert-danger class */
-  .alert-danger {
-    background-color: #f8d7da;
-    color: #721c24;
-    padding: 10px;
-    margin-bottom: 20px;
-    border: 1px solid #f5c6cb;
-    border-radius: 4px;
-  }
-
-  /* Add margin to the password requirements */
-  .password-requirements {
-    margin-top: 15px;
-    margin-bottom: 15px;
-  }
-
-  /* Style the requirements list */
-  .requirements-list, li {
-    color: red;
-    list-style-type: none;
-    padding: 0;
-    margin: 0;
-    font-size: 14px;
-  }
-
-  /* Style the form-control class */
-  .form-control {
-    width: 100%;
-    /* Full width */
-    border-radius: 0.25rem;
-    /* Rounded corners */
-  }
-
-  /* Style the input and select elements */
-  input,
-  select {
-    display: block;
-    width: 100%;
-    padding: .375rem .75rem;
-    font-size: 1rem;
-    line-height: 1.5;
-    color: #495057;
-    background-color: #fff;
-    background-clip: padding-box;
-    border: 1px solid #ced4da;
-    border-radius: .25rem;
-    transition: border-color .15s ease-in-out, box-shadow .15s ease-in-out;
-  }
-
-  .already-registered {
-  margin-bottom: 15px; /* Adjust spacing as needed */
-  text-align: center; /* Center-align the text */
-}
-</style>
-{% endblock %}
-
-<!-- Start of the content block -->
+<!-- Define the content block -->
 {% block content %}
-<!-- Container for the registration form -->
-<div class="register-container">
-  <!-- Card for the registration form -->
-  <div class="card">
-    <!-- Header of the card -->
-    <div class="card-header">Register</div>
-    <!-- Body of the card -->
-    <div class="card-body">
-      <!-- If there are any messages, display them -->
-      {% if messages %}
-      {% for message in messages %}
-      <div class="alert alert-{{ message.tags }}">
-        <!-- Display the message -->
-        {{ message }}
-      </div>
-      {% endfor %}
-      {% endif %}
 
-      <div class="already-registered">
-        Already registered? <a href="{% url 'login' %}">Log In</a>
-      </div>
+<!-- Inline CSS for styling the form and buttons -->
+<style>
+  body, html {
+      height: 100%;
+      margin: 0;
+  }
 
-      <!-- Registration form -->
-      <form method="post" id="registrationForm">
-        <!-- CSRF token for security -->
-        {% csrf_token %}
+  /* Style the container for the registration form */
+  .register-container {
+      margin: 0 auto;
+      width: 50%;
+      padding: 20px;
+  }
 
-        <!-- Render first name and last name fields -->
-        <div class="form-group">
-          <label for="{{ user_form.first_name.id_for_label }}">First Name</label>
-          <!-- Django form for first name -->
-          {{ user_form.first_name }}
+  .register-card {
+      background-color: #f0f0f0;
+      border: 1px solid #ccc;
+      border-radius: 12px; /* Rounded corners for the card */
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+      margin-bottom: 20px;
+  }
+
+  .register-card-header {
+      background-color: #5431B2;
+      color: white;
+      font-size: 16px;
+      display: flex;
+      align-items: center;
+      padding: 10px;
+      justify-content: start;
+  }
+
+  .register-card-body {
+      padding: 20px;
+  }
+
+  /* Ensure all form fields span the full width and have rounded corners */
+  .form-control {
+      width: 100%;
+      padding: 12px;
+      font-size: 16px;
+      border: 1px solid #ccc;
+      border-radius: 30px; /* Larger border-radius for more oval shape */
+      margin-bottom: 15px;
+  }
+
+  .helptext {
+      font-size: 12px;
+      color: #666;
+      margin-top: -10px;
+      margin-bottom: 15px;
+  }
+
+  /* Style the "Already Registered?" section */
+  .already-registered {
+      margin-bottom: 20px; /* Add padding below the "Already registered" link */
+      text-align: left; /* Align the link to the left */
+  }
+
+  /* Center the register button and style it */
+  .register-btn {
+      display: block;
+      background-color: #5431B2;
+      color: white;
+      border: none;
+      padding: 10px 20px;
+      font-size: 16px;
+      border-radius: 30px;  /* Larger rounded corners for button */
+      text-align: center;
+      cursor: pointer;
+      margin: 20px auto 0; /* Center the button */
+      width: auto;
+  }
+
+  /* Change button color on hover */
+  .register-btn:hover {
+      background-color: #FFC617;
+      color: #5431B2;
+  }
+
+  /* Password requirements style */
+  #passwordRequirements {
+      margin-top: 10px; /* Add spacing between the password fields and requirements */
+      margin-bottom: 20px;
+  }
+
+  #passwordRequirements p {
+      color: red;
+      margin: 0;
+      font-size: 14px;
+  }
+</style>
+
+<!-- Registration form -->
+<div class="register-card">
+    <div class="register-card-header">Register</div>
+    <div class="register-card-body">
+        <!-- If there are any messages, display them -->
+        {% if messages %}
+        {% for message in messages %}
+        <div class="alert alert-{{ message.tags }}">
+            {{ message }}
         </div>
-        <div class="form-group">
-          <label for="{{ user_form.last_name.id_for_label }}">Last Name</label>
-          <!-- Django form for last name -->
-          {{ user_form.last_name }}
+        {% endfor %}
+        {% endif %}
+
+        <div class="already-registered">
+            Already registered? <a href="{% url 'login' %}">Log In</a>
         </div>
 
-        <!-- Render username field -->
-        <div class="form-group">
-          <label for="{{ user_form.username.id_for_label }}">Username</label>
-          <!-- Django form for username -->
-          {{ user_form.username }}
-        </div>
+        <!-- Registration form -->
+        <form method="post" id="registrationForm">
+            {% csrf_token %}
 
-        <!-- Updated email field with placeholder -->
-        <div class="form-group">
-          <label for="{{ user_form.email.id_for_label }}">Email</label>
-          <!-- Django form for email with placeholder -->
-          <input type="email" class="form-control" id="{{ user_form.email.id_for_label }}" name="{{ user_form.email.html_name }}" placeholder="email@domain.com" required>
-        </div>
+            <!-- Full-width first name field -->
+            <div class="form-group">
+                {{ user_form.first_name.label_tag }}
+                {{ user_form.first_name|add_class:"form-control" }}  <!-- Apply add_class only to the form field -->
+            </div>
 
-        <!-- Password Requirements Section -->
-        <div class="password-requirements">
-          <h6>Password Requirements:</h6>
-          <!-- List of password requirements -->
-          <ul id="passwordRequirementsList">
-            <li id="reqSpecialChar">One special character</li>
-            <li id="reqCapitalLetter">One capital letter</li>
-            <li id="reqNumber">One number</li>
-            <li id="passwordMatchMessage" class="requirements-list">Passwords match.</li>
-          </ul>
-        </div>
+            <!-- Full-width last name field -->
+            <div class="form-group">
+                {{ user_form.last_name.label_tag }}
+                {{ user_form.last_name|add_class:"form-control" }}   <!-- Apply add_class only to the form field -->
+            </div>
 
-        
+            <!-- Full-width username field -->
+            <div class="form-group">
+                {{ user_form.username.label_tag }}
+                {{ user_form.username|add_class:"form-control" }}    <!-- Apply add_class only to the form field -->
+                <div class="helptext">{{ user_form.username.help_text }}</div>   <!-- Username requirements displayed below -->
+            </div>
 
+            <!-- Full-width email field -->
+            <div class="form-group">
+                {{ user_form.email.label_tag }}
+                {{ user_form.email|add_class:"form-control" }}  <!-- Apply add_class only to the form field -->
+            </div>
 
-        <!-- Render password fields -->
-        <div class="form-group">
-          <label for="{{ user_form.password1.id_for_label }}">Password</label>
-          <!-- Django form for password -->
-          {{ user_form.password1 }}
-        </div>
-        <div class="form-group">
-          <label for="{{ user_form.password2.id_for_label }}">Confirm Password</label>
-          <!-- Django form for password confirmation -->
-          {{ user_form.password2 }}
-        </div>
+            <!-- Full-width password field -->
+            <div class="form-group">
+                {{ user_form.password1.label_tag }}
+                {{ user_form.password1|add_class:"form-control" }}   <!-- Apply add_class only to the form field -->
+            </div>
 
-        <!-- Render profile form fields -->
-        <!-- Django form for profile -->
-        {{ profile_form.as_p }}
+            <!-- Password requirements displayed directly under the first password field -->
+            <div id="passwordRequirements">
+                <p id="reqSpecialChar">Contains a special character (e.g., !@#$%^&*)</p>
+                <p id="reqCapitalLetter">Contains a capital letter</p>
+                <p id="reqNumber">Contains a number</p>
+                <p id="passwordMatchMessage">Passwords match.</p>
+            </div>
 
-        <!-- Submit button for the form -->
-        <button type="submit">Register</button>
-      </form>
-      <!-- JavaScript to add an event listener to the registration form -->
-      <script>
-        document.getElementById('registrationForm').addEventListener('input', function (event) {
-          // If the input event is from the password field, check the password strength
-          if (event.target.id === 'id_password1') {
-            checkPasswordStrength();
-          }
-        });
+            <!-- Full-width confirm password field -->
+            <div class="form-group">
+                {{ user_form.password2.label_tag }}
+                {{ user_form.password2|add_class:"form-control" }}   <!-- Apply add_class only to the form field -->
+            </div>
 
-        //Define the function to check password strength
+            <!-- Full-width city field -->
+            <div class="form-group">
+                {{ profile_form.city.label_tag }}
+                {{ profile_form.city|add_class:"form-control" }}   <!-- Apply add_class only to the form field -->
+            </div>
 
-        // Define the function to check password strength and match
-        function checkPasswordStrengthAndMatch() {
-        // Get the password values from the form
-            const password = document.getElementById("id_password1").value;
-            const confirmPassword = document.getElementById("id_password2").value;
+            <!-- Full-width state field -->
+            <div class="form-group">
+                {{ profile_form.state.label_tag }}
+                {{ profile_form.state|add_class:"form-control" }}   <!-- Apply add_class only to the form field -->
+            </div>
 
-        // Get the elements that display the password requirements
-            const reqSpecialChar = document.getElementById("reqSpecialChar");
-            const reqCapitalLetter = document.getElementById("reqCapitalLetter");
-            const reqNumber = document.getElementById("reqNumber");
-            const passwordMatchMessage = document.getElementById("passwordMatchMessage");
+            <!-- Full-width financial goals field -->
+            <div class="form-group">
+                {{ profile_form.financial_goals.label_tag }}
+                {{ profile_form.financial_goals|add_class:"form-control" }}   <!-- Apply add_class only to the form field -->
+            </div>
 
-        // Check if the password contains a special character
-            reqSpecialChar.style.color = /[!@#$%^&*(),.?":{}|<>]/.test(password) ? 'green' : 'red';
+            <!-- Additional profile fields -->
+            <div class="form-group">
+                {{ profile_form.experience_level.label_tag }}
+                {{ profile_form.experience_level|add_class:"form-control" }}
+            </div>
 
-        // Check if the password contains a capital letter
-            reqCapitalLetter.style.color = /[A-Z]/.test(password) ? 'green' : 'red';
+            <div class="form-group">
+                {{ profile_form.risk_tolerance.label_tag }}
+                {{ profile_form.risk_tolerance|add_class:"form-control" }}
+            </div>
 
-        // Check if the password contains a number
-            reqNumber.style.color = /[0-9]/.test(password) ? 'green' : 'red';
+            <div class="form-group">
+                {{ profile_form.income_level.label_tag }}
+                {{ profile_form.income_level|add_class:"form-control" }}
+            </div>
 
-        // Check if passwords match
-            passwordMatchMessage.style.color = password === confirmPassword ? 'green' : 'red';
-            passwordMatchMessage.textContent = password === confirmPassword ? 'Passwords match.' : 'Passwords do not match.';
-        }
+            <div class="form-group">
+                {{ profile_form.has_dependents.label_tag }}
+                {{ profile_form.has_dependents|add_class:"form-control" }}
+            </div>
 
-    // Add event listeners to the password and confirm password fields
+            <div class="form-group">
+                {{ profile_form.savings_months.label_tag }}
+                {{ profile_form.savings_months|add_class:"form-control" }}
+            </div>
+
+            <!-- Submit button centered -->
+            <button type="submit" class="register-btn">Register</button>
+        </form>
+    </div>
+</div>
+
+<!-- Script to handle password strength and matching -->
+<script>
+    function checkPasswordStrengthAndMatch() {
+        const password = document.getElementById("id_password1").value;
+        const confirmPassword = document.getElementById("id_password2").value;
+
+        const reqSpecialChar = document.getElementById("reqSpecialChar");
+        const reqCapitalLetter = document.getElementById("reqCapitalLetter");
+        const reqNumber = document.getElementById("reqNumber");
+        const passwordMatchMessage = document.getElementById("passwordMatchMessage");
+
+        reqSpecialChar.style.color = /[!@#$%^&*(),.?":{}|<>]/.test(password) ? 'green' : 'red';
+        reqCapitalLetter.style.color = /[A-Z]/.test(password) ? 'green' : 'red';
+        reqNumber.style.color = /[0-9]/.test(password) ? 'green' : 'red';
+        passwordMatchMessage.style.color = password === confirmPassword ? 'green' : 'red';
+        passwordMatchMessage.textContent = password === confirmPassword ? 'Passwords match.' : 'Passwords do not match.';
+    }
+
     document.getElementById("id_password1").addEventListener("keyup", checkPasswordStrengthAndMatch);
     document.getElementById("id_password2").addEventListener("keyup", checkPasswordStrengthAndMatch);
+</script>
 
-// Add event listeners to the password and confirm password fields
-document.getElementById("id_password1").addEventListener("keyup", checkPasswordStrengthAndMatch);
-document.getElementById("id_password2").addEventListener("keyup", checkPasswordStrengthAndMatch);
-
-      </script>
-
-      <!-- If there are any messages -->
-      {% if messages %}
-      <script>
-        // After 5 seconds, redirect to the login page
-        setTimeout(function () {
-          window.location.href = "{% url 'login' %}";
-        }, 5000);  // Redirect after 5 seconds
-      </script>
-      {% endif %}
-    </div>
-  </div>
-</div>
-<!-- End of the content block -->
 {% endblock %}

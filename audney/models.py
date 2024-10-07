@@ -8,6 +8,60 @@ import bleach
 # Get a logger for this module
 logger = logging.getLogger(__name__)
 
+# Define the list of U.S. states as a tuple of abbreviations and names
+STATE_CHOICES = [
+    ('AL', 'Alabama'),
+    ('AK', 'Alaska'),
+    ('AZ', 'Arizona'),
+    ('AR', 'Arkansas'),
+    ('CA', 'California'),
+    ('CO', 'Colorado'),
+    ('CT', 'Connecticut'),
+    ('DE', 'Delaware'),
+    ('FL', 'Florida'),
+    ('GA', 'Georgia'),
+    ('HI', 'Hawaii'),
+    ('ID', 'Idaho'),
+    ('IL', 'Illinois'),
+    ('IN', 'Indiana'),
+    ('IA', 'Iowa'),
+    ('KS', 'Kansas'),
+    ('KY', 'Kentucky'),
+    ('LA', 'Louisiana'),
+    ('ME', 'Maine'),
+    ('MD', 'Maryland'),
+    ('MA', 'Massachusetts'),
+    ('MI', 'Michigan'),
+    ('MN', 'Minnesota'),
+    ('MS', 'Mississippi'),
+    ('MO', 'Missouri'),
+    ('MT', 'Montana'),
+    ('NE', 'Nebraska'),
+    ('NV', 'Nevada'),
+    ('NH', 'New Hampshire'),
+    ('NJ', 'New Jersey'),
+    ('NM', 'New Mexico'),
+    ('NY', 'New York'),
+    ('NC', 'North Carolina'),
+    ('ND', 'North Dakota'),
+    ('OH', 'Ohio'),
+    ('OK', 'Oklahoma'),
+    ('OR', 'Oregon'),
+    ('PA', 'Pennsylvania'),
+    ('RI', 'Rhode Island'),
+    ('SC', 'South Carolina'),
+    ('SD', 'South Dakota'),
+    ('TN', 'Tennessee'),
+    ('TX', 'Texas'),
+    ('UT', 'Utah'),
+    ('VT', 'Vermont'),
+    ('VA', 'Virginia'),
+    ('WA', 'Washington'),
+    ('WV', 'West Virginia'),
+    ('WI', 'Wisconsin'),
+    ('WY', 'Wyoming'),
+]
+
 # Define a UserProfile model
 class UserProfile(models.Model):
     # Define choices for the financial_goals field
@@ -20,6 +74,12 @@ class UserProfile(models.Model):
         ('tax_planning', 'Tax Planning'),
         ('estate_planning', 'Estate Planning'),
         ('wealth_management', 'Wealth Management'),
+    ]
+
+    EXPERIENCE_LEVEL_CHOICES = [
+        ('beginner', 'Beginner'),
+        ('intermediate', 'Intermediate'),
+        ('advanced', 'Advanced'),
     ]
 
     # New choices for the additional fields
@@ -50,10 +110,15 @@ class UserProfile(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE)
     date_of_birth = models.DateField(null=True, blank=True)
     financial_goals = models.CharField(max_length=50, choices=FINANCIAL_GOALS_CHOICES, blank=False)
+    experience_level = models.CharField(max_length=20, choices=EXPERIENCE_LEVEL_CHOICES, blank=True, null=True)
     risk_tolerance = models.CharField(max_length=20, choices=RISK_TOLERANCE_CHOICES, blank=True, null=True)
     income_level = models.CharField(max_length=20, choices=INCOME_LEVEL_CHOICES, blank=True, null=True)
     has_dependents = models.CharField(max_length=3, choices=DEPENDENTS_CHOICES, blank=True, null=True)
     savings_months = models.CharField(max_length=10, choices=SAVINGS_MONTHS_CHOICES, blank=True, null=True)
+    
+    # Add the city and state fields
+    city = models.CharField(max_length=100, blank=True, null=True)
+    state = models.CharField(max_length=2, choices=STATE_CHOICES, blank=True, null=True)
 
     def __str__(self):
         return f"{self.user.username}'s profile"

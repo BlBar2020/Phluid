@@ -5,41 +5,29 @@ from django.utils import timezone
 from django.utils.timezone import make_aware, now, timedelta
 import logging
 import time
-from django.http import HttpResponse, JsonResponse, HttpResponseBadRequest, HttpResponseServerError
-
-from django.views.decorators.csrf import csrf_exempt
-from django.utils.decorators import method_decorator
-from django.views import View
-from django.utils.html import strip_tags
+from django.http import JsonResponse, HttpResponseServerError
 
 from django.shortcuts import render, redirect
 from django.http import JsonResponse
 from django.contrib import auth, messages
 from django.contrib.auth import update_session_auth_hash, authenticate, login as auth_login
-from django.contrib.auth.models import User
 from django.contrib.auth.decorators import login_required
-from django.contrib.auth.forms import UserCreationForm
-from django.db import transaction, IntegrityError, models
-from django.core.exceptions import ValidationError, ObjectDoesNotExist
+from django.db import transaction, IntegrityError
 from django.utils.html import escape
-from django.conf import settings
 from django.contrib.auth import authenticate, login as auth_login
 from django.contrib import auth
 from django.db.models import Value, CharField, TextField
 # from django_otp.oath import TOTP
-from django.utils.html import mark_safe
 from django.utils.dateformat import format
-from django.views.decorators.http import require_http_methods, require_POST, require_GET
+from django.views.decorators.http import require_http_methods, require_GET
 import json
 from django.utils.timezone import now
-from django.db.models import F
 
 # Import local modules and functions
 from .models import UserMessage, AudneyMessage, StockPriceResponse, MarketCondition, UserProfile
 from audney.models import UserProfile
 from .forms import UserProfileForm, UserForm
-from .market_analysis import get_stock_price, search_company_or_ticker, calculate_user_age, update_market_conditions, extract_company_name
-from django.core.mail import send_mail
+from .market_analysis import get_stock_price, calculate_user_age, update_market_conditions, extract_company_name, get_ticker_symbol_from_name
 from django.core.mail import EmailMessage
 from .forms import SupportForm
 import pandas as pd
@@ -47,6 +35,8 @@ import requests
 
 # Import OpenAI module
 from openai import OpenAI
+from .financial_statistics import get_census_data_msa_or_place, estimate_expenses, extract_location
+from .query_handlers import classify_query_with_gpt, handle_stock_price_query
 
 client = OpenAI(api_key=os.getenv('OPENAI_API_KEY'))
 
@@ -74,63 +64,129 @@ def analyze_market_news(news_df):
 
 # Call OpenAI API for personalized advice
 def ask_openai(user_input, user):
+    logger.debug(f"Entered ask_openai with user_input: {user_input}, user: {user}")
 
-    # Update market conditions
-    update_market_conditions()
-    market_conditions = MarketCondition.objects.all()
-    market_conditions_str = '\n'.join([f"Currently, '{mc.ticker}' seems to be in a {mc.condition} market." for mc in market_conditions])
+    # First, classify the user's query using GPT
+    query_type = classify_query_with_gpt(user_input).strip().lower()  # Ensure proper case and whitespace handling
+    logger.info(f"Query type classified as: {query_type} for input: {user_input}")
 
-    # Gather user financial profile
-    user_profile = user.userprofile
-    user_age = calculate_user_age(user_profile.date_of_birth)
-    user_financial_goal = user_profile.financial_goals
-    additional_user_details = f"Risk Tolerance: {user_profile.get_risk_tolerance_display()}, " \
-                              f"Income Level: {user_profile.get_income_level_display()}, " \
-                              f"Dependents: {user_profile.get_has_dependents_display()}, " \
-                              f"Savings Coverage: {user_profile.get_savings_months_display()}."
-    user_context = f"I am {user_age} years old. My financial goal is {user_financial_goal}. {additional_user_details}"
+    # Check for stock price query and handle appropriately
+    if query_type == "stock_price":
+        logger.info("Handling stock price query...")
+        stock_price_response, contains_html = handle_stock_price_query(user_input)
+        
+        logger.debug(f"Stock price response from handle_stock_price_query: {stock_price_response}, contains_html: {contains_html}")
 
-    # Fetch and summarize market news
-    news_df = get_market_news()
-    if news_df is not None:
-        analyzed_news = analyze_market_news(news_df)
-        if analyzed_news is not None:
-            news_summary = "\n".join(analyzed_news['summary'].tolist())  # Summarize news
+        # Ensure that a valid stock price response is returned
+        if stock_price_response:
+            logger.info(f"Returning valid stock price response: {stock_price_response}, skipping financial advice.")
+            return stock_price_response  # Return right away!
         else:
-            news_summary = "No relevant market news available."
+            logger.error("Stock price response is empty or invalid. Proceeding to default error handling for stock prices.")
+            return "Sorry, I couldn't fetch the stock price at this time."
     else:
-        news_summary = "No market news could be fetched."
-
-    # System message to guide the AI model
-    system_message = (
-        f"Here is some market data: {market_conditions_str}. "
-        f"The user has the following financial profile: {user_context}. "
-        f"Additionally, here are the latest market news updates: {news_summary}. "
-        "When responding, consider this user's financial goals, risk tolerance, and market data to provide personalized advice. "
-        "Your tone should be friendly, supportive, and informative, much like a personal financial advisor who is also a friend."
-    )
+        # If it's not a stock price query, proceed with the financial advice flow
+        logger.info(f"Query type '{query_type}' is not 'stock_price', proceeding with financial advice flow.")
+    
+    # Additional logging for the financial advice flow
+    logger.debug(f"Proceeding with financial advice for user_input: {user_input}")
 
     try:
-        # Sending the chat completion request
-        chat_completion = client.chat.completions.create(model="gpt-4",
-        messages=[
-            {"role": "system", "content": "You are a professional, emotionally intelligent, and friendly financial advisor named Audney. Your goal is to educate the user on their finances and provide tailored advice."},
-            {"role": "system", "content": system_message},
-            {"role": "user", "content": user_input}
-        ])
+        # Fetch and update market conditions
+        update_market_conditions()
+        market_conditions = MarketCondition.objects.all()
+        market_conditions_str = '\n'.join([f"Currently, '{mc.ticker}' seems to be in a {mc.condition} market." for mc in market_conditions])
+        logger.debug(f"Market conditions: {market_conditions_str}")
+
+        # Gather user financial profile details
+        user_profile = user.userprofile
+        user_age = calculate_user_age(user_profile.date_of_birth)
+        user_financial_goal = user_profile.financial_goals
+        city = user_profile.city
+        state = user_profile.state
+        additional_user_details = f"Risk Tolerance: {user_profile.get_risk_tolerance_display()}, " \
+                                  f"Income Level: {user_profile.get_income_level_display()}, " \
+                                  f"Dependents: {user_profile.get_has_dependents_display()}, " \
+                                  f"Savings Coverage: {user_profile.get_savings_months_display()}."
+        logger.debug(f"User profile: age={user_age}, goals={user_financial_goal}, city={city}, state={state}, additional_details={additional_user_details}")
+
+        # Extract city/state if specified in the user's query
+        specified_city, specified_state = extract_location(user_input)
+        logger.debug(f"Extracted location from input: city={specified_city}, state={specified_state}")
+
+        # If the user specifies a different location, use it; otherwise, use profile location
+        if specified_city and specified_state:
+            city, state = specified_city, specified_state
+            message_prefix = f"Based on the median income in {city}, {state}: "
+        else:
+            message_prefix = f"Based on the median income in your location ({city}, {state}): "
+        logger.debug(f"Location message prefix: {message_prefix}")
+
+        # Get census data for user's city and state or the specified location
+        median_income = get_census_data_msa_or_place(city, state)
+        logger.debug(f"Median income for {city}, {state}: {median_income}")
+
+        if isinstance(median_income, int):  # If valid income data is returned
+            expense_estimates = estimate_expenses(median_income)
+            expenses_str = ", ".join([f"{category}: ${amount}" for category, amount in expense_estimates.items()])
+            location_message = f"The median household income for {city}, {state} is ${median_income}. Estimated expenses are: {expenses_str}."
+        else:
+            expenses_str = "Income and expense data not available."
+            location_message = "Income data not available for the specified location."
+        logger.debug(f"Location message: {location_message}")
+
+        # Construct user financial context as system knowledge
+        user_context = f"The user is {user_age} years old, with financial goals set as: {user_financial_goal}. " \
+                       f"Additional details include {additional_user_details}."
+        logger.debug(f"User context: {user_context}")
+
+        # Fetch and summarize market news
+        news_df = get_market_news()
+        if news_df is not None:
+            analyzed_news = analyze_market_news(news_df)
+            if analyzed_news is not None:
+                news_summary = "\n".join(analyzed_news['summary'].tolist())  # Summarize news
+            else:
+                news_summary = "No relevant market news available."
+        else:
+            news_summary = "No market news could be fetched."
+        logger.debug(f"Market news summary: {news_summary}")
+
+        # System message to guide the AI model
+        system_message = (
+            f"Here is some market data: {market_conditions_str}. "
+            f"{user_context} "
+            f"{location_message} "
+            f"Additionally, here are the latest market news updates: {news_summary}. "
+            "When responding, consider this user's financial goals, experience level, risk tolerance, income level, "
+            "whether the user has dependents, and market data to provide personalized advice. "
+            "Your tone should be friendly, supportive, and informative, much like a personal financial advisor who is also a friend."
+        )
+        logger.debug(f"System message for GPT: {system_message}")
+
+        # Sending the chat completion request to GPT
+        chat_completion = client.chat.completions.create(
+            model="gpt-4-turbo",
+            messages=[
+                {"role": "system", "content": "You are a professional, emotionally intelligent, and friendly financial advisor named Audney. Your goal is to educate the user on their finances and provide tailored advice."},
+                {"role": "system", "content": system_message},
+                {"role": "user", "content": user_input}
+            ]
+        )
 
         # Handle the API response
         if chat_completion.choices:
             answer = chat_completion.choices[0].message.content.strip()
+            logger.info(f"Received response from OpenAI: {answer}")
             return answer
         else:
+            logger.error("No response from OpenAI.")
             return "No response from OpenAI."
 
     except Exception as e:
-        print(f"Error calling OpenAI: {e}")
+        logger.error(f"Error calling OpenAI: {e}")
         return "An error occurred while processing your request."
-
-
+    
 @require_http_methods(["GET", "POST"])
 def chatbot_response(request):
     if not request.user.is_authenticated:
@@ -158,13 +214,25 @@ def chatbot_response(request):
             created_at=make_aware(datetime.now())
         )
 
-    # Check if the query is about stock price
-    if any(keyword in user_input.lower() for keyword in ['price', 'ticker', 'how much']):
+    # Use OpenAI to classify the query
+    query_type = classify_query_with_gpt(user_input).strip().lower().strip("'\" ")  # Strip surrounding quotes
+    logger.info(f"Query type classified as: '{query_type}' for input: {user_input}")
+
+    # Ensure debugging logs to capture the exact type and comparison
+    logger.debug(f"Raw query_type: {repr(query_type)} (before comparison)")
+
+    # Handle stock price queries
+    if query_type == "stock_price":
+        logger.debug(f"query_type is 'stock_price' (confirmed match), proceeding with stock price handling.")
         company_name_or_symbol = extract_company_name(user_input)
-        possible_matches = search_company_or_ticker(company_name_or_symbol)
+        
+        if not company_name_or_symbol:
+            return JsonResponse({"message": "Sorry, I couldn't determine the company or stock you're referring to."})
+        
+        possible_matches = get_ticker_symbol_from_name(company_name_or_symbol)
 
         if len(possible_matches) == 1:
-            # If exactly one match is found, fetch the stock price
+            # Fetch the stock price for the single match
             company_name, ticker_symbol = possible_matches[0]
             stock_price = get_stock_price(ticker_symbol)
             ticker_quote = f"Currently, {company_name} ({ticker_symbol}) is priced at {stock_price}."
@@ -173,7 +241,8 @@ def chatbot_response(request):
             # Delay to prevent race condition
             time.sleep(1)
 
-            recent_time_threshold = timezone.now() - timedelta(seconds=5)  # Adjust as needed
+            # Prevent duplicate responses within a short time frame
+            recent_time_threshold = timezone.now() - timedelta(seconds=5)
             existing_response = StockPriceResponse.objects.filter(
                 user=request.user,
                 query=user_input,
@@ -195,7 +264,7 @@ def chatbot_response(request):
             response_message = ticker_quote
 
         elif len(possible_matches) > 1:
-            # If multiple matches are found, prompt the user to choose
+            # If there are multiple matches, return them to the user for selection
             response_message = "I found multiple companies with that name, please choose the one you're referring to: "
             response_message += "<ul>"
             for name, ticker in possible_matches:
@@ -203,10 +272,8 @@ def chatbot_response(request):
             response_message += "</ul>"
             contains_html = True
 
-            logger.debug(f"contains_html value: {contains_html}")
-
-            # Assuming user_input, user, and answer are available
-            recent_time_threshold = timezone.now() - timedelta(seconds=5)  # Adjust the timedelta as needed
+            # Prevent duplicate messages
+            recent_time_threshold = timezone.now() - timedelta(seconds=5)
             existing_message = AudneyMessage.objects.filter(
                 user=request.user,
                 message=response_message,
@@ -225,11 +292,12 @@ def chatbot_response(request):
                 logger.info("Duplicate message detected, not saving.")
 
         else:
+            # Handle case where no matches are found
             response_message = "Sorry, I couldn't find the stock price for the company you mentioned."
             contains_html = False
 
-            logger.debug(f"contains_html value: {contains_html}")
-            recent_time_threshold = timezone.now() - timedelta(seconds=5)  # Adjust the timedelta as needed
+            # Prevent duplicate responses
+            recent_time_threshold = timezone.now() - timedelta(seconds=5)
             existing_message = AudneyMessage.objects.filter(
                 user=request.user,
                 message=response_message,
@@ -246,16 +314,16 @@ def chatbot_response(request):
                 )
             else:
                 logger.info("Duplicate message detected, not saving.")
+
     else:
-        # Handle investment strategy or general queries using OpenAI API
+        # Handle other types of queries using OpenAI API
+        logger.debug(f"query_type is not 'stock_price' (query_type = {repr(query_type)}), proceeding with other handling.")
         response = ask_openai(user_input, request.user)
         response_message = response if response else "Sorry, I couldn't understand your query."
         contains_html = False
 
-        logger.debug(f"contains_html value: {contains_html}")
-
-        # Check if a similar response has been generated recently
-        recent_time_threshold = timezone.now() - timedelta(seconds=5)  # Adjust the timedelta as needed
+        # Prevent duplicate responses
+        recent_time_threshold = timezone.now() - timedelta(seconds=5)
         existing_message = AudneyMessage.objects.filter(
             user=request.user,
             message=response_message,
@@ -273,7 +341,7 @@ def chatbot_response(request):
         else:
             logger.info("Duplicate message detected, not saving.")
 
-    # Format the timestamp
+    # Format the timestamp for the response
     timestamp_format = make_aware(datetime.now()).strftime('%Y-%m-%d %H:%M:%S')
 
     return JsonResponse({
@@ -281,29 +349,37 @@ def chatbot_response(request):
         'html': contains_html,
         'timestamp': timestamp_format,
     })
+
 @require_GET
 def get_stock_price_view(request):
     user = request.user
     symbol = request.GET.get('symbol')
-    companyName = request.GET.get('companyName')
+    company_name_input = request.GET.get('companyName')
 
     if user.is_authenticated and symbol:
         try:
-            price = get_stock_price(symbol)
-            escaped_company_name = escape(companyName)
+            # Extract and clean company name
+            company_name = extract_company_name(company_name_input) if company_name_input else "Unknown company"
+            escaped_company_name = escape(company_name)
 
+            price = get_stock_price(symbol)
+
+            # Log and store the stock price response
             StockPriceResponse.objects.create(
                 user=user,
-                query=f"Stock price check for {companyName} ({symbol})",
-                ticker_quote=f"{companyName} is currently priced at {price}",
+                query=f"Stock price check for {escaped_company_name} ({symbol})",
+                ticker_quote=f"{escaped_company_name} is currently priced at {price}",
                 message_type='system'
-
-             ) # Indicating this is a system-generated response
+            )
 
             return JsonResponse({'success': True, 'price': price, 'companyName': escaped_company_name})
         except Exception as e:
-            return JsonResponse({'success': False, 'error': str(e)})
-    return JsonResponse({'success': False, 'error': 'No symbol provided or user not authenticated'})
+            logger.error(f"Error fetching stock price for {symbol}: {e}")
+            return JsonResponse({'success': False, 'error': f"An error occurred: {str(e)}"})
+    else:
+        error_message = 'No symbol provided or user not authenticated.'
+        logger.warning(error_message)
+        return JsonResponse({'success': False, 'error': error_message})
 
 @login_required
 def audney(request):
@@ -435,53 +511,29 @@ def update_profile(request):
     profile = UserProfile.objects.get(user=user)
 
     if request.method == 'POST':
-        new_username = request.POST.get('new_username')
-        new_email = request.POST.get('new_email')
-        new_password1 = request.POST.get('new_password1')
-        new_password2 = request.POST.get('new_password2')
-        financial_goals = request.POST.get('financial_goals')
-        risk_tolerance = request.POST.get('risk_tolerance')
-        income_level = request.POST.get('income_level')
-        has_dependents = request.POST.get('has_dependents')
-        savings_months = request.POST.get('savings_months')
+        user_form = UserForm(request.POST, instance=user)
+        profile_form = UserProfileForm(request.POST, instance=profile)
 
-        # Update username if it has changed
-        if new_username and new_username != user.username:
-            user.username = new_username
-            user.save()
-            messages.success(request, 'Username updated successfully.')
+        if user_form.is_valid() and profile_form.is_valid():
+            user_form.save()
+            profile_form.save()
 
-        # Update email if it has changed
-        if new_email and new_email != user.email:
-            user.email = new_email
-            user.save()
-            messages.success(request, 'Email updated successfully.')
+            # Update the session with the new password if changed
+            if user_form.cleaned_data.get('password1'):
+                update_session_auth_hash(request, user)
 
-        # Update password if it has changed and is confirmed
-        if new_password1 and new_password1 == new_password2:
-            user.set_password(new_password1)
-            user.save()
-            update_session_auth_hash(request, user)
-            messages.success(request, 'Password updated successfully.')
+            messages.success(request, 'Profile updated successfully.')
+            return redirect('chatbot')
+        else:
+            messages.error(request, 'Please correct the error below.')
+    else:
+        user_form = UserForm(instance=user)
+        profile_form = UserProfileForm(instance=profile)
 
-        # Update UserProfile fields
-        if financial_goals:
-            profile.financial_goals = financial_goals
-        if risk_tolerance:
-            profile.risk_tolerance = risk_tolerance
-        if income_level:
-            profile.income_level = income_level
-        if has_dependents:
-            profile.has_dependents = has_dependents
-        if savings_months:
-            profile.savings_months = savings_months
-        profile.save()
-        messages.success(request, 'Profile updated successfully.')
-
-        return redirect('chatbot')
-
-    return render(request, 'update_profile.html', {'user': user})
-
+    return render(request, 'update_profile.html', {
+        'user_form': user_form,
+        'profile_form': profile_form
+    })
 # Define a function to handle registration requests
 def register(request):
     # Check if the request method is POST
@@ -578,4 +630,3 @@ def support_success(request, from_page='default'):
     # Determine the source from the query parameter
     context = {'source_page': from_page}
     return render(request, 'support_success.html', context)
-

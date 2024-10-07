@@ -2,19 +2,10 @@
 import os
 from .models import MarketCondition
 import pandas as pd
-import numpy as np
 import logging
 from datetime import datetime as dt, date, timedelta
 import requests
-from django.conf import settings
 from openai import OpenAI
-import polygon
-import yfinance as yf
-import json
-
-# Get the OpenAI and Polygon API keys from settings
-openai_api_key = settings.OPENAI_API_KEY
-polygon_api_key = settings.POLYGON_API_KEY
 
 # Get the logger for this module
 logger = logging.getLogger(__name__)
@@ -33,14 +24,35 @@ def calculate_user_age(date_of_birth):
 
 def get_stock_price(ticker_symbol):
     try:
-        ticker = yf.Ticker(ticker_symbol)
-        hist = ticker.history(period="1d")
-        if not hist.empty:
-            price = hist['Close'].iloc[-1]
-            formatted_price = "${:.2f}".format(price)
-            return formatted_price
+        api_key = os.getenv('ALPHA_VANTAGE_API_KEY')
+        if not api_key:
+            logger.error("Alpha Vantage API key not found in environment variables.")
+            return "Error fetching stock price: API key not found."
+
+        logger.info(f"Fetching stock price for ticker: {ticker_symbol}")
+        
+        # Make API call to Alpha Vantage for the stock price
+        url = f'https://www.alphavantage.co/query?function=TIME_SERIES_INTRADAY&symbol={ticker_symbol}&interval=5min&apikey={api_key}'
+        response = requests.get(url)
+
+        if response.status_code == 200:
+            data = response.json()
+
+            # Extract the latest closing price from the API response
+            time_series = data.get('Time Series (5min)', {})
+            if time_series:
+                latest_timestamp = max(time_series.keys())
+                price = time_series[latest_timestamp]['4. close']
+                formatted_price = "${:.2f}".format(float(price))
+                logger.info(f"Retrieved stock price for {ticker_symbol}: {formatted_price}")
+                return formatted_price
+            else:
+                logger.warning(f"No stock data available for {ticker_symbol}. It may be inactive or delisted.")
+                return f"Stock data not available for {ticker_symbol}. It may be inactive or delisted."
         else:
-            return f"Stock data not available for {ticker_symbol}. It may be inactive or delisted."
+            logger.error(f"Error fetching stock price from Alpha Vantage: {response.text}")
+            return f"Error fetching stock price: {response.status_code}"
+
     except Exception as e:
         logger.error(f"Error fetching stock price for {ticker_symbol}: {e}")
         return f"Error fetching stock price: {e}"
@@ -59,48 +71,74 @@ def classify_market(row, threshold=0.20):
 
 def update_market_conditions():
     try:
-        tickers = ['TQQQ', 'SPY', 'X:BTCUSD']
+        tickers = ['TQQQ', 'SPY', 'X:BTCUSD']  # Example tickers
         current_datetime = dt.now()
 
         # Define the start and end dates for the last five years
         start_date = current_datetime - timedelta(days=5 * 365)
         end_date = current_datetime
+        api_key = os.getenv('ALPHA_VANTAGE_API_KEY')
+
+        if not api_key:
+            logger.error("Alpha Vantage API key not found.")
+            return
 
         for ticker in tickers:
-            # Fetch data using yfinance
-            data = yf.download(ticker, start=start_date, end=end_date)
+            logger.info(f"Fetching data for {ticker} from Alpha Vantage")
+            
+            # Make API call to Alpha Vantage for stock data
+            url = f'https://www.alphavantage.co/query?function=TIME_SERIES_DAILY_ADJUSTED&symbol={ticker}&outputsize=full&apikey={api_key}'
+            response = requests.get(url)
 
-            if not data.empty:
-                # Ensure the 'Close' column is available
-                data = data[['Close']]
+            if response.status_code == 200:
+                data = response.json()
 
-                # Calculate daily returns
-                data['Returns'] = data['Close'].pct_change().fillna(0)
+                # Extract time series data
+                time_series = data.get('Time Series (Daily)', {})
+                if time_series:
+                    df = pd.DataFrame(time_series).T  # Transpose the data so dates are the index
+                    df.index = pd.to_datetime(df.index)  # Convert index to datetime
+                    df = df[(df.index >= pd.to_datetime(start_date)) & (df.index <= pd.to_datetime(end_date))]  # Filter by date range
 
-                # Calculate cumulative returns
-                data['Cumulative_Returns'] = (1 + data['Returns']).cumprod() - 1
+                    # Ensure the 'Close' column is available
+                    df = df.rename(columns={'5. adjusted close': 'Close'})
 
-                # Classify the market based on the latest cumulative return
-                latest_cumulative_return = data['Cumulative_Returns'].iloc[-1]
-                current_market_condition = classify_market(latest_cumulative_return)
+                    if 'Close' in df.columns:
+                        # Calculate daily returns
+                        df['Returns'] = df['Close'].pct_change().fillna(0)
 
-                # Update or create the market condition in the database
-                MarketCondition.objects.update_or_create(ticker=ticker, defaults={'condition': current_market_condition})
+                        # Calculate cumulative returns
+                        df['Cumulative_Returns'] = (1 + df['Returns']).cumprod() - 1
+
+                        # Classify the market based on the latest cumulative return
+                        latest_cumulative_return = df['Cumulative_Returns'].iloc[-1]
+                        current_market_condition = classify_market(latest_cumulative_return)
+
+                        # Update or create the market condition in the database
+                        MarketCondition.objects.update_or_create(ticker=ticker, defaults={'condition': current_market_condition})
+                    else:
+                        logger.error(f"No 'Close' data available for ticker {ticker}.")
+                else:
+                    logger.error(f"No data returned for ticker {ticker}.")
             else:
-                logger.error(f"No data returned for ticker {ticker}.")
+                logger.error(f"Error fetching data for {ticker} from Alpha Vantage: {response.text}")
     except Exception as e:
         logger.error(f"Error updating market conditions: {e}")
 
-
 def extract_stock_symbol_with_nlp(text):
     try:
-        client = OpenAI(api_key=settings.OPENAI_API_KEY)
+        api_key = os.getenv('OPENAI_API_KEY')
+        if not api_key:
+            logger.error("OpenAI API key not found.")
+            return None
+
+        client = OpenAI(api_key=api_key)
         messages = [
             {"role": "system", "content": "Identify the most relevant company and its stock symbol from the text."},
             {"role": "user", "content": text}
         ]
         response = client.chat.completions.create(
-            model="gpt-4",
+            model="gpt-4-turbo",
             messages=messages
         )
         extracted_info = response.choices[0].message['content'].strip()
@@ -112,11 +150,18 @@ def extract_stock_symbol_with_nlp(text):
 # Function to get ticker symbol from a company name
 def get_ticker_symbol_from_name(company_name):
     try:
-        url = f"https://api.polygon.io/v3/reference/tickers?search={company_name}&active=true&sort=ticker&order=asc&limit=10&apiKey={polygon_api_key}"
+        api_key = os.getenv('ALPHA_VANTAGE_API_KEY')
+        if not api_key:
+            logger.error("Alpha Vantage API key not found.")
+            return []
+
+        # Use Alpha Vantage's SYMBOL_SEARCH function
+        url = f"https://www.alphavantage.co/query?function=SYMBOL_SEARCH&keywords={company_name}&apikey={api_key}"
         response = requests.get(url)
+
         if response.status_code == 200:
             data = response.json()
-            matches = [(ticker_info.get('name', ''), ticker_info.get('ticker', '')) for ticker_info in data.get('results', [])]
+            matches = [(result.get('2. name', ''), result.get('1. symbol', '')) for result in data.get('bestMatches', [])]
             return matches
         else:
             logger.error(f"Error fetching ticker symbol for company name {company_name}: {response.text}")
@@ -125,22 +170,27 @@ def get_ticker_symbol_from_name(company_name):
         logger.error(f"Error in get_ticker_symbol_from_name function: {e}")
         return []
 
-# Function to extract a company name from a text string
+# Function to extract a clean company name or ticker symbol from user input
 # Function to extract a clean company name or ticker symbol from user input
 def extract_company_name(text):
     try:
-        client = OpenAI(api_key=settings.OPENAI_API_KEY)
+        api_key = os.getenv('OPENAI_API_KEY')
+        if not api_key:
+            logger.error("OpenAI API key not found.")
+            return None
+
+        client = OpenAI(api_key=api_key)
         if not text:
             logger.warning("Input text is empty.")
             return None
 
         messages = [
-            {"role": "system", "content": "Extract the company name or ticker symbol from the text."},
+            {"role": "system", "content": "Extract only the company name or ticker symbol from the text. Do not include any additional text or descriptions."},
             {"role": "user", "content": text}
         ]
 
         response = client.chat.completions.create(
-            model="gpt-4",
+            model="gpt-4-turbo",
             messages=messages
         )
 
@@ -149,7 +199,7 @@ def extract_company_name(text):
             logger.info(f"Extracted company name or ticker symbol: {message_content}")
 
             # Ensure we return only the name or ticker, not a descriptive string
-            extracted_text = message_content.split(':')[-1].strip()  # Assume format is "Company name: Apple"
+            extracted_text = message_content.split(':')[-1].strip() if ':' in message_content else message_content.strip()
             return extracted_text
         else:
             logger.warning("No company name or ticker symbol found.")
@@ -167,8 +217,13 @@ def search_company_or_ticker(query):
         if not extracted_query:
             return []
 
-        # Send the cleaned-up query to the Polygon API
-        url = f"https://api.polygon.io/v3/reference/tickers?search={extracted_query}&apiKey={polygon_api_key}"
+        # Use Alpha Vantage's SYMBOL_SEARCH function
+        api_key = os.getenv('ALPHA_VANTAGE_API_KEY')
+        if not api_key:
+            logger.error("Alpha Vantage API key not found.")
+            return []
+
+        url = f"https://www.alphavantage.co/query?function=SYMBOL_SEARCH&keywords={extracted_query}&apikey={api_key}"
         response = requests.get(url)
 
         if response.status_code == 200:
@@ -176,9 +231,9 @@ def search_company_or_ticker(query):
 
             # Filter the results based on whether the company name or ticker symbol contains the query (case-insensitive)
             possible_matches = [
-                (result['name'], result['ticker'])
-                for result in data.get('results', [])
-                if extracted_query.lower() in result['name'].lower() or extracted_query.lower() in result['ticker'].lower()
+                (result['2. name'], result['1. symbol'])
+                for result in data.get('bestMatches', [])
+                if extracted_query.lower() in result['2. name'].lower() or extracted_query.lower() in result['1. symbol'].lower()
             ]
 
             # Return an exact match if one exists, otherwise return the filtered possible matches
@@ -193,36 +248,3 @@ def search_company_or_ticker(query):
     except Exception as e:
         logger.error(f"Error searching for company/ticker: {e}")
         return []
-
-# Function to handle stock price queries
-def handle_stock_price_query(user_input):
-    company_name_or_symbol = extract_company_name(user_input)
-    logger.info(f"Extracted company name or symbol: {company_name_or_symbol}")
-
-    possible_matches = search_company_or_ticker(company_name_or_symbol)
-    logger.info(f"Possible matches found: {possible_matches}")
-
-    if isinstance(possible_matches, tuple):
-        # Only one result, return stock price
-        company_name, ticker_symbol = possible_matches
-        stock_price = get_stock_price(ticker_symbol)
-        logger.info(f"Stock price for {company_name} ({ticker_symbol}): {stock_price}")
-        
-        response_message = f"Currently, {company_name} ({ticker_symbol}) is priced at {stock_price}."
-        contains_html = False
-    else:
-        # Multiple matches or no match
-        if len(possible_matches) > 1:
-            response_message = "I found multiple companies with that name, please choose the one you're referring to: "
-            response_message += "<ul>"
-            for name, ticker in possible_matches:
-                response_message += f"<li><a href='#' onclick='fetchStockPrice(\"{ticker}\", \"{name}\")'>{name} ({ticker})</a></li>"
-            response_message += "</ul>"
-            contains_html = True
-        else:
-            response_message = "Sorry, I couldn't find the stock price for the company you mentioned."
-            contains_html = False
-
-    logger.info(f"Final response message: {response_message}, Contains HTML: {contains_html}")
-
-    return response_message, contains_html
