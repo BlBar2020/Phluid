@@ -1,6 +1,8 @@
 import os
 import logging
-import openai
+from openai import OpenAI
+
+client = OpenAI()
 from openai import OpenAI
 from .market_analysis import get_stock_price, extract_company_name, calculate_user_age, search_company_or_ticker
 from .financial_statistics import get_census_data_msa_or_place, estimate_expenses
@@ -10,15 +12,13 @@ from scipy.spatial.distance import cosine
 logger = logging.getLogger(__name__)
 
 def get_embedding(text):
-    response = openai.Embedding.create(
-        model="text-embedding-ada-002",  # Ensure this is available in your OpenAI account
-        input=text
-    )
-    return response['data'][0]['embedding']
+    response = client.embeddings.create(model="text-embedding-ada-002",  # Ensure this is available in your OpenAI account
+    input=text)
+    return response.data[0].embedding
 
 def classify_using_embeddings(user_input):
     stock_query_intent = "Ask about stock price"
-    
+
     # Get the embeddings for the user input and the stock price intent
     input_embedding = get_embedding(user_input)
     stock_intent_embedding = get_embedding(stock_query_intent)
@@ -31,7 +31,6 @@ def classify_using_embeddings(user_input):
         return "stock_price"
     else:
         return "other"
-
 def classify_query_with_gpt(user_input):
     try:
         # Ensure the API key is available in the environment
@@ -63,13 +62,17 @@ def classify_query_with_gpt(user_input):
         ]
 
         # Call OpenAI's GPT model for classification
-        response = client.chat.completions.create(model="gpt-4-turbo", messages=messages)
+        response = client.chat.completions.create(model="chatgpt-4o-latest", messages=messages)
 
         # Log the raw response for debugging purposes
         logger.debug(f"OpenAI classification response: {response}")
 
-        # Extract the classification result from the response, defaulting to 'other' if none is provided
+        # Extract the classification result from the response
         query_type = response.choices[0].message.content.strip().lower() if response.choices else "other"
+
+        # Strip out "Category: " or similar prefix from the response
+        query_type = query_type.replace("category: ", "").strip()
+
         logger.info(f"Query type classified as: '{query_type}' for input: {user_input}")
 
         # Ensure proper mapping of query types to valid categories
@@ -150,33 +153,33 @@ def handle_financial_advice(user_input, user):
     user_age = calculate_user_age(user_profile.date_of_birth)  # Assuming this exists
     user_financial_goal = user_profile.financial_goals
     city, state = user_profile.city, user_profile.state
-    
+
     # Use census and expense data
     median_income = get_census_data_msa_or_place(city, state, os.getenv('CENSUS_API_KEY'))
-    
+
     if isinstance(median_income, int):
         expense_estimates = estimate_expenses(median_income)
         expenses_str = ", ".join([f"{category}: ${amount}" for category, amount in expense_estimates.items()])
     else:
         expenses_str = "Income and expense data not available."
-    
+
     user_context = f"I am {user_age} years old. My financial goal is {user_financial_goal}. " \
                    f"Estimated household expenses: {expenses_str}."
-    
+
     return user_context
 
 # Handler for investment strategy
 def handle_investment_strategy(user_input, user):
     user_profile = user.userprofile
     risk_tolerance = user_profile.get_risk_tolerance_display()
-    
+
     try:
         client = OpenAI(api_key=os.getenv('OPENAI_API_KEY'))
         messages = [
             {"role": "system", "content": f"Provide investment strategy advice for a user with this risk tolerance: {risk_tolerance}."},
             {"role": "user", "content": user_input}
         ]
-        response = client.chat.completions.create(model="gpt-4-turbo", messages=messages)
+        response = client.chat.completions.create(model="chatgpt-4o-latest", messages=messages)
         return response.choices[0].message.content.strip()
     except Exception as e:
         logger.error(f"Error generating investment strategy advice: {e}")

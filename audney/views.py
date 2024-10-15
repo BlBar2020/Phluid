@@ -35,10 +35,12 @@ import requests
 
 # Import OpenAI module
 from openai import OpenAI
-from .financial_statistics import get_census_data_msa_or_place, estimate_expenses, extract_location
-from .query_handlers import classify_query_with_gpt, handle_stock_price_query
 
 client = OpenAI(api_key=os.getenv('OPENAI_API_KEY'))
+from .financial_statistics import get_census_data_msa_or_place, estimate_expenses, extract_location, get_demographic_data, get_employment_data, get_housing_data
+from .query_handlers import classify_query_with_gpt, handle_stock_price_query
+
+# Set the OpenAI API key
 
 # Get a logger instance
 logger = logging.getLogger(__name__)
@@ -62,34 +64,27 @@ def analyze_market_news(news_df):
     # Example: Filter by relevance score or sentiment, using top 5
     return news_df.head(5) if 'summary' in news_df.columns else None
 
-# Call OpenAI API for personalized advice
 def ask_openai(user_input, user):
     logger.debug(f"Entered ask_openai with user_input: {user_input}, user: {user}")
 
     # First, classify the user's query using GPT
-    query_type = classify_query_with_gpt(user_input).strip().lower()  # Ensure proper case and whitespace handling
+    query_type = classify_query_with_gpt(user_input).strip().lower()
     logger.info(f"Query type classified as: {query_type} for input: {user_input}")
 
     # Check for stock price query and handle appropriately
     if query_type == "stock_price":
         logger.info("Handling stock price query...")
         stock_price_response, contains_html = handle_stock_price_query(user_input)
-        
         logger.debug(f"Stock price response from handle_stock_price_query: {stock_price_response}, contains_html: {contains_html}")
 
-        # Ensure that a valid stock price response is returned
         if stock_price_response:
             logger.info(f"Returning valid stock price response: {stock_price_response}, skipping financial advice.")
-            return stock_price_response  # Return right away!
+            return stock_price_response
         else:
             logger.error("Stock price response is empty or invalid. Proceeding to default error handling for stock prices.")
             return "Sorry, I couldn't fetch the stock price at this time."
     else:
-        # If it's not a stock price query, proceed with the financial advice flow
         logger.info(f"Query type '{query_type}' is not 'stock_price', proceeding with financial advice flow.")
-    
-    # Additional logging for the financial advice flow
-    logger.debug(f"Proceeding with financial advice for user_input: {user_input}")
 
     try:
         # Fetch and update market conditions
@@ -110,34 +105,84 @@ def ask_openai(user_input, user):
                                   f"Savings Coverage: {user_profile.get_savings_months_display()}."
         logger.debug(f"User profile: age={user_age}, goals={user_financial_goal}, city={city}, state={state}, additional_details={additional_user_details}")
 
-        # Extract city/state if specified in the user's query
-        specified_city, specified_state = extract_location(user_input)
+        # Extract city/state if specified in the user's query or fall back to profile
+        logger.debug(f"User input: {user_input}")
+        specified_city, specified_state = extract_location(user_input, {"city": city, "state": state})
         logger.debug(f"Extracted location from input: city={specified_city}, state={specified_state}")
 
         # If the user specifies a different location, use it; otherwise, use profile location
         if specified_city and specified_state:
             city, state = specified_city, specified_state
-            message_prefix = f"Based on the median income in {city}, {state}: "
+            location_context = f"Based on data for {city}, {state}:"
         else:
-            message_prefix = f"Based on the median income in your location ({city}, {state}): "
-        logger.debug(f"Location message prefix: {message_prefix}")
+            location_context = f"Based on data for your location ({city}, {state}):"
+        logger.debug(f"Location context: {location_context}")
 
         # Get census data for user's city and state or the specified location
         median_income = get_census_data_msa_or_place(city, state)
         logger.debug(f"Median income for {city}, {state}: {median_income}")
 
-        if isinstance(median_income, int):  # If valid income data is returned
+        # Get additional demographic, employment, and housing data
+        demographic_data = get_demographic_data(city, state)
+        logger.debug(f"Demographic data for {city}, {state}: {demographic_data}")
+
+        employment_data = get_employment_data(city, state)
+        logger.debug(f"Employment data for {city}, {state}: {employment_data}")
+
+        housing_data = get_housing_data(city, state)
+        logger.debug(f"Housing data for {city}, {state}: {housing_data}")
+
+        # Construct location message with the retrieved data
+        location_messages = []
+
+        if isinstance(median_income, int):
+            location_messages.append(f"The median household income in {city}, {state} is ${median_income}.")
             expense_estimates = estimate_expenses(median_income)
             expenses_str = ", ".join([f"{category}: ${amount}" for category, amount in expense_estimates.items()])
-            location_message = f"The median household income for {city}, {state} is ${median_income}. Estimated expenses are: {expenses_str}."
+            location_messages.append(f"Estimated expenses based on median income are: {expenses_str}.")
         else:
-            expenses_str = "Income and expense data not available."
-            location_message = "Income data not available for the specified location."
+            location_messages.append("Income data not available for the specified location.")
+
+        if demographic_data:
+            total_population = demographic_data.get('total_population')
+            poverty_rate = demographic_data.get('poverty_rate')
+            if total_population is not None and poverty_rate is not None:
+                location_messages.append(f"The total population is {total_population}, with a poverty rate of {poverty_rate:.2f}%.")
+            else:
+                location_messages.append("Demographic data is incomplete.")
+        else:
+            location_messages.append("Demographic data not available.")
+
+        if employment_data:
+            employment_rate = employment_data.get('employment_rate')
+            unemployment_rate = employment_data.get('unemployment_rate')
+            if employment_rate is not None and unemployment_rate is not None:
+                location_messages.append(f"The employment rate is {employment_rate:.2f}%, and the unemployment rate is {unemployment_rate:.2f}%.")
+            else:
+                location_messages.append("Employment data is incomplete.")
+        else:
+            location_messages.append("Employment data not available.")
+
+        if housing_data:
+            median_home_value = housing_data.get('median_home_value')
+            median_gross_rent = housing_data.get('median_gross_rent')
+            if median_home_value is not None:
+                location_messages.append(f"The median home value in {city}, {state} is ${median_home_value}.")
+            else:
+                location_messages.append("Median home value data not available.")
+            if median_gross_rent is not None:
+                location_messages.append(f"The median gross rent in {city}, {state} is ${median_gross_rent}.")
+            else:
+                location_messages.append("Median gross rent data not available.")
+        else:
+            location_messages.append("Housing data not available.")
+
+        # Combine all location messages
+        location_message = " ".join(location_messages)
         logger.debug(f"Location message: {location_message}")
 
         # Construct user financial context as system knowledge
-        user_context = f"The user is {user_age} years old, with financial goals set as: {user_financial_goal}. " \
-                       f"Additional details include {additional_user_details}."
+        user_context = f"The user is {user_age} years old, with financial goals set as: {user_financial_goal}. {additional_user_details}"
         logger.debug(f"User context: {user_context}")
 
         # Fetch and summarize market news
@@ -145,34 +190,58 @@ def ask_openai(user_input, user):
         if news_df is not None:
             analyzed_news = analyze_market_news(news_df)
             if analyzed_news is not None:
-                news_summary = "\n".join(analyzed_news['summary'].tolist())  # Summarize news
+                news_summary = "\n".join(analyzed_news['summary'].tolist())
             else:
                 news_summary = "No relevant market news available."
         else:
             news_summary = "No market news could be fetched."
         logger.debug(f"Market news summary: {news_summary}")
 
-        # System message to guide the AI model
+        # Adjusted System Message
         system_message = (
-            f"Here is some market data: {market_conditions_str}. "
-            f"{user_context} "
-            f"{location_message} "
-            f"Additionally, here are the latest market news updates: {news_summary}. "
-            "When responding, consider this user's financial goals, experience level, risk tolerance, income level, "
-            "whether the user has dependents, and market data to provide personalized advice. "
-            "Your tone should be friendly, supportive, and informative, much like a personal financial advisor who is also a friend."
+            f"You are a professional, emotionally intelligent, and friendly financial advisor named Audney. "
+            f"Your goal is to educate the user on their finances and provide tailored advice.\n\n"
+            f"{user_context}\n\n"
+            f"{location_context}\n\n"
+            f"{location_message}\n\n"
+            f"Here is some market data:\n{market_conditions_str}\n\n"
+            f"Additionally, here are the latest market news updates:\n{news_summary}\n\n"
+            "**Instructions:** Use the above data to provide a detailed and specific response to the user's query. "
+            "Focus on the data provided and avoid mentioning any limitations of your knowledge or access to real-time data. "
+            "Do not include disclaimers about data availability. Present the information confidently and helpfully.\n\n"
+            "When responding, consider the user's financial goals, experience level, risk tolerance, income level, "
+            "dependents, and market data to provide personalized advice. Your tone should be friendly, supportive, and informative, "
+            "like a personal financial advisor who is also a friend. Use markdown formatting when appropriate to enhance readability, especially for lists and headings."
         )
         logger.debug(f"System message for GPT: {system_message}")
 
-        # Sending the chat completion request to GPT
-        chat_completion = client.chat.completions.create(
-            model="gpt-4-turbo",
-            messages=[
-                {"role": "system", "content": "You are a professional, emotionally intelligent, and friendly financial advisor named Audney. Your goal is to educate the user on their finances and provide tailored advice."},
-                {"role": "system", "content": system_message},
-                {"role": "user", "content": user_input}
-            ]
-        )
+        # Incorporate conversation history (Optional: You can include this if needed)
+        recent_user_messages = UserMessage.objects.filter(user=user).order_by('-created_at')[:10]
+        recent_audney_messages = AudneyMessage.objects.filter(user=user).order_by('-created_at')[:10]
+
+        # Combine and sort messages by timestamp
+        combined_messages = list(recent_user_messages) + list(recent_audney_messages)
+        combined_messages.sort(key=lambda msg: msg.created_at)
+
+        # Build the messages list for the API call
+        messages = [
+            {"role": "system", "content": system_message},
+        ]
+
+        # Optionally include conversation history
+        for msg in combined_messages:
+            if isinstance(msg, UserMessage):
+                messages.append({"role": "user", "content": msg.message})
+            elif isinstance(msg, AudneyMessage):
+                messages.append({"role": "assistant", "content": msg.message})
+
+        # Add the current user input
+        messages.append({"role": "user", "content": user_input})
+
+        logger.debug(f"Messages sent to OpenAI: {messages}")
+
+        chat_completion = client.chat.completions.create(model="chatgpt-4o-latest",
+        messages=messages)
 
         # Handle the API response
         if chat_completion.choices:
@@ -186,7 +255,7 @@ def ask_openai(user_input, user):
     except Exception as e:
         logger.error(f"Error calling OpenAI: {e}")
         return "An error occurred while processing your request."
-    
+
 @require_http_methods(["GET", "POST"])
 def chatbot_response(request):
     if not request.user.is_authenticated:
@@ -225,10 +294,10 @@ def chatbot_response(request):
     if query_type == "stock_price":
         logger.debug(f"query_type is 'stock_price' (confirmed match), proceeding with stock price handling.")
         company_name_or_symbol = extract_company_name(user_input)
-        
+
         if not company_name_or_symbol:
             return JsonResponse({"message": "Sorry, I couldn't determine the company or stock you're referring to."})
-        
+
         possible_matches = get_ticker_symbol_from_name(company_name_or_symbol)
 
         if len(possible_matches) == 1:
@@ -263,57 +332,50 @@ def chatbot_response(request):
 
             response_message = ticker_quote
 
+            # Store the assistant's response
+            AudneyMessage.objects.create(
+                user=request.user,
+                user_query=user_input,
+                message=response_message,
+                contains_html=contains_html,
+                message_type='audney',
+                created_at=make_aware(datetime.now())
+            )
+
         elif len(possible_matches) > 1:
             # If there are multiple matches, return them to the user for selection
             response_message = "I found multiple companies with that name, please choose the one you're referring to: "
             response_message += "<ul>"
             for name, ticker in possible_matches:
-                response_message += f"<li><a href='#' onclick='fetchStockPrice(\"{ticker}\", \"{name}\")'>{name} ({ticker})</a></li>"
+                # Updated to use class and data attributes instead of onclick
+                response_message += f"<li><a href='#' class='stock-link' data-ticker-symbol='{ticker}' data-company-name='{name}'>{name} ({ticker})</a></li>"
             response_message += "</ul>"
             contains_html = True
 
-            # Prevent duplicate messages
-            recent_time_threshold = timezone.now() - timedelta(seconds=5)
-            existing_message = AudneyMessage.objects.filter(
+            # Store the assistant's response
+            AudneyMessage.objects.create(
                 user=request.user,
+                user_query=user_input,
                 message=response_message,
-                created_at__gte=recent_time_threshold
-            ).exists()
-
-            if not existing_message:
-                AudneyMessage.objects.create(
-                    user=request.user,
-                    user_query=user_input,
-                    message=response_message,
-                    contains_html=contains_html,
-                    message_type='audney',
-                )
-            else:
-                logger.info("Duplicate message detected, not saving.")
+                contains_html=contains_html,
+                message_type='audney',
+                created_at=make_aware(datetime.now())
+            )
 
         else:
             # Handle case where no matches are found
             response_message = "Sorry, I couldn't find the stock price for the company you mentioned."
             contains_html = False
 
-            # Prevent duplicate responses
-            recent_time_threshold = timezone.now() - timedelta(seconds=5)
-            existing_message = AudneyMessage.objects.filter(
+            # Store the assistant's response
+            AudneyMessage.objects.create(
                 user=request.user,
+                user_query=user_input,
                 message=response_message,
-                created_at__gte=recent_time_threshold
-            ).exists()
-
-            if not existing_message:
-                AudneyMessage.objects.create(
-                    user=request.user,
-                    user_query=user_input,
-                    message=response_message,
-                    contains_html=contains_html,
-                    message_type='audney',
-                )
-            else:
-                logger.info("Duplicate message detected, not saving.")
+                contains_html=contains_html,
+                message_type='audney',
+                created_at=make_aware(datetime.now())
+            )
 
     else:
         # Handle other types of queries using OpenAI API
@@ -322,24 +384,15 @@ def chatbot_response(request):
         response_message = response if response else "Sorry, I couldn't understand your query."
         contains_html = False
 
-        # Prevent duplicate responses
-        recent_time_threshold = timezone.now() - timedelta(seconds=5)
-        existing_message = AudneyMessage.objects.filter(
+        # Store the assistant's response
+        AudneyMessage.objects.create(
             user=request.user,
+            user_query=user_input,
             message=response_message,
-            created_at__gte=recent_time_threshold
-        ).exists()
-
-        if not existing_message:
-            AudneyMessage.objects.create(
-                user=request.user,
-                user_query=user_input,
-                message=response_message,
-                contains_html=contains_html,
-                message_type='audney',
-            )
-        else:
-            logger.info("Duplicate message detected, not saving.")
+            contains_html=contains_html,
+            message_type='audney',
+            created_at=make_aware(datetime.now())
+        )
 
     # Format the timestamp for the response
     timestamp_format = make_aware(datetime.now()).strftime('%Y-%m-%d %H:%M:%S')

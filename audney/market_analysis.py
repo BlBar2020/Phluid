@@ -7,8 +7,13 @@ from datetime import datetime as dt, date, timedelta
 import requests
 from openai import OpenAI
 
+client = OpenAI(api_key=os.getenv('OPENAI_API_KEY'))
+
 # Get the logger for this module
 logger = logging.getLogger(__name__)
+
+# Set the OpenAI API key globally
+
 
 # Function to calculate user's age from their date of birth
 def calculate_user_age(date_of_birth):
@@ -22,6 +27,7 @@ def calculate_user_age(date_of_birth):
         logger.error(f"Error calculating age: {e}")
         return None
 
+
 def get_stock_price(ticker_symbol):
     try:
         api_key = os.getenv('ALPHA_VANTAGE_API_KEY')
@@ -30,7 +36,7 @@ def get_stock_price(ticker_symbol):
             return "Error fetching stock price: API key not found."
 
         logger.info(f"Fetching stock price for ticker: {ticker_symbol}")
-        
+
         # Make API call to Alpha Vantage for the stock price
         url = f'https://www.alphavantage.co/query?function=TIME_SERIES_INTRADAY&symbol={ticker_symbol}&interval=5min&apikey={api_key}'
         response = requests.get(url)
@@ -57,6 +63,7 @@ def get_stock_price(ticker_symbol):
         logger.error(f"Error fetching stock price for {ticker_symbol}: {e}")
         return f"Error fetching stock price: {e}"
 
+
 def classify_market(row, threshold=0.20):
     try:
         if row >= threshold:
@@ -69,9 +76,10 @@ def classify_market(row, threshold=0.20):
         logger.error(f"Error classifying market: {e}")
         return 'Unknown'
 
+
 def update_market_conditions():
     try:
-        tickers = ['TQQQ', 'SPY', 'X:BTCUSD']  # Example tickers
+        tickers = ['TQQQ', 'SPY', 'CLX']  # Example tickers
         current_datetime = dt.now()
 
         # Define the start and end dates for the last five years
@@ -85,7 +93,7 @@ def update_market_conditions():
 
         for ticker in tickers:
             logger.info(f"Fetching data for {ticker} from Alpha Vantage")
-            
+
             # Make API call to Alpha Vantage for stock data
             url = f'https://www.alphavantage.co/query?function=TIME_SERIES_DAILY_ADJUSTED&symbol={ticker}&outputsize=full&apikey={api_key}'
             response = requests.get(url)
@@ -100,24 +108,28 @@ def update_market_conditions():
                     df.index = pd.to_datetime(df.index)  # Convert index to datetime
                     df = df[(df.index >= pd.to_datetime(start_date)) & (df.index <= pd.to_datetime(end_date))]  # Filter by date range
 
-                    # Ensure the 'Close' column is available
-                    df = df.rename(columns={'5. adjusted close': 'Close'})
-
-                    if 'Close' in df.columns:
-                        # Calculate daily returns
-                        df['Returns'] = df['Close'].pct_change().fillna(0)
-
-                        # Calculate cumulative returns
-                        df['Cumulative_Returns'] = (1 + df['Returns']).cumprod() - 1
-
-                        # Classify the market based on the latest cumulative return
-                        latest_cumulative_return = df['Cumulative_Returns'].iloc[-1]
-                        current_market_condition = classify_market(latest_cumulative_return)
-
-                        # Update or create the market condition in the database
-                        MarketCondition.objects.update_or_create(ticker=ticker, defaults={'condition': current_market_condition})
+                    # Rename '5. adjusted close' to 'Close' if it exists
+                    if '5. adjusted close' in df.columns:
+                        df = df.rename(columns={'5. adjusted close': 'Close'})
+                    elif '4. close' in df.columns:
+                        df = df.rename(columns={'4. close': 'Close'})
                     else:
                         logger.error(f"No 'Close' data available for ticker {ticker}.")
+                        continue
+
+                    # Calculate daily returns
+                    df['Returns'] = df['Close'].pct_change().fillna(0)
+
+                    # Calculate cumulative returns
+                    df['Cumulative_Returns'] = (1 + df['Returns']).cumprod() - 1
+
+                    # Classify the market based on the latest cumulative return
+                    latest_cumulative_return = df['Cumulative_Returns'].iloc[-1]
+                    current_market_condition = classify_market(latest_cumulative_return)
+
+                    # Update or create the market condition in the database
+                    MarketCondition.objects.update_or_create(ticker=ticker, defaults={'condition': current_market_condition})
+                    logger.info(f"Updated market condition for {ticker}: {current_market_condition}")
                 else:
                     logger.error(f"No data returned for ticker {ticker}.")
             else:
@@ -125,31 +137,50 @@ def update_market_conditions():
     except Exception as e:
         logger.error(f"Error updating market conditions: {e}")
 
-def extract_stock_symbol_with_nlp(text):
+
+def extract_company_name(user_input):
     try:
-        api_key = os.getenv('OPENAI_API_KEY')
-        if not api_key:
-            logger.error("OpenAI API key not found.")
+        if not user_input:
+            logger.warning("Input text is empty.")
             return None
 
-        client = OpenAI(api_key=api_key)
         messages = [
-            {"role": "system", "content": "Identify the most relevant company and its stock symbol from the text."},
-            {"role": "user", "content": text}
+            {
+                "role": "system", 
+                "content": "Extract only the company name or ticker symbol from the text. Do not include any additional text or descriptions."
+            },
+            {"role": "user", "content": user_input}
         ]
-        response = client.chat.completions.create(
-            model="gpt-4-turbo",
-            messages=messages
-        )
-        extracted_info = response.choices[0].message['content'].strip()
-        return extracted_info
+
+        response = client.chat.completions.create(model="chatgpt-4o-latest",
+        messages=messages)
+
+        if response.choices:
+            message_content = response.choices[0].message.content.strip()
+            logger.info(f"Extracted company name or ticker symbol: {message_content}")
+
+            # Ensure we return only the name or ticker, not a descriptive string
+            extracted_company_name = message_content.split(':')[-1].strip() if ':' in message_content else message_content.strip()
+
+            if extracted_company_name.lower() != "stock_price":
+                return extracted_company_name
+            else:
+                return None
+        else:
+            logger.warning("No company name or ticker symbol found.")
+            return None
+
     except Exception as e:
-        logger.error(f"Error in NLP extraction with chat model: {e}")
+        logger.error(f"Failed to extract company name: {e}")
         return None
 
-# Function to get ticker symbol from a company name
+
 def get_ticker_symbol_from_name(company_name):
     try:
+        if not company_name:
+            logger.warning("Company name is empty.")
+            return []
+
         api_key = os.getenv('ALPHA_VANTAGE_API_KEY')
         if not api_key:
             logger.error("Alpha Vantage API key not found.")
@@ -162,6 +193,7 @@ def get_ticker_symbol_from_name(company_name):
         if response.status_code == 200:
             data = response.json()
             matches = [(result.get('2. name', ''), result.get('1. symbol', '')) for result in data.get('bestMatches', [])]
+            logger.info(f"Ticker symbols for {company_name}: {matches}")
             return matches
         else:
             logger.error(f"Error fetching ticker symbol for company name {company_name}: {response.text}")
@@ -170,46 +202,7 @@ def get_ticker_symbol_from_name(company_name):
         logger.error(f"Error in get_ticker_symbol_from_name function: {e}")
         return []
 
-# Function to extract a clean company name or ticker symbol from user input
-# Function to extract a clean company name or ticker symbol from user input
-def extract_company_name(text):
-    try:
-        api_key = os.getenv('OPENAI_API_KEY')
-        if not api_key:
-            logger.error("OpenAI API key not found.")
-            return None
 
-        client = OpenAI(api_key=api_key)
-        if not text:
-            logger.warning("Input text is empty.")
-            return None
-
-        messages = [
-            {"role": "system", "content": "Extract only the company name or ticker symbol from the text. Do not include any additional text or descriptions."},
-            {"role": "user", "content": text}
-        ]
-
-        response = client.chat.completions.create(
-            model="gpt-4-turbo",
-            messages=messages
-        )
-
-        if response.choices:
-            message_content = response.choices[0].message.content.strip()
-            logger.info(f"Extracted company name or ticker symbol: {message_content}")
-
-            # Ensure we return only the name or ticker, not a descriptive string
-            extracted_text = message_content.split(':')[-1].strip() if ':' in message_content else message_content.strip()
-            return extracted_text
-        else:
-            logger.warning("No company name or ticker symbol found.")
-            return None
-
-    except Exception as e:
-        logger.error(f"Failed to extract company name: {e}")
-        return None
-
-# Function to search for a company or ticker symbol with prioritized matches
 def search_company_or_ticker(query):
     try:
         # Ensure the extracted query is valid and clean

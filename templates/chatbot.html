@@ -252,6 +252,25 @@
     background-color: #FFC617; /* Change color on hover/focus */
     color: #5431B2; /* Change text color on hover/focus */
   }
+
+  /* Adjust heading sizes */
+  .message-content h1 {
+    font-size: 1.5em; /* Adjust as needed */
+  }
+
+  .message-content h2 {
+    font-size: 1.3em; /* Adjust as needed */
+  }
+
+  .message-content h3 {
+    font-size: 1.1em; /* Adjust as needed */
+  }
+
+  .message-content h4,
+  .message-content h5,
+  .message-content h6 {
+    font-size: 1em; /* Same size as normal text */
+  }
 </style>
 {% endblock %}
 
@@ -288,7 +307,7 @@
     <!-- Check if the user is authenticated -->
     {% if user.is_authenticated %}
     <!-- If the user is authenticated, display a welcome message and links to update profile, logout, and support -->
-    <div class="card-header bg-primary text-white"><b>Welcome, {{user.username}}</b>
+    <div class="card-header bg-primary text-white"><b>Welcome, {{user.first_name}}</b>
       <a href="update_profile" class="header-link">Update Profile</a>
       <span class="separator">|</span>
       <a href="logout" class="header-link">Logout</a>
@@ -351,6 +370,10 @@
   </div>
 </div>
 
+<!-- Include markdown-it and DOMPurify via CDN -->
+<script src="https://cdn.jsdelivr.net/npm/markdown-it/dist/markdown-it.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/dompurify@2.4.0/dist/purify.min.js"></script>
+
 <!-- Create a script for handling the form submission -->
 <script>
   // Utility function to get CSRF token
@@ -358,196 +381,221 @@
     return document.cookie.split('; ').find(row => row.startsWith('csrftoken=')).split('=')[1];
   }
 
-  // Initialize lastMessageId from sessionStorage or set to 0 if not present
-  const lastMessageId = sessionStorage.getItem('lastMessageId') || 0;
+  // Initialize markdown-it with HTML enabled
+  const md = window.markdownit({
+    html: true,        // Enable HTML tags in source
+    linkify: true,     // Autoconvert URL-like text to links
+    typographer: true, // Enable smartypants and other typographic replacements
+  });
 
-
-    // Function to fetch chat history
-    function fetchChatHistory() {
-        const lastMessageId = sessionStorage.getItem('lastMessageId') || 0;
-        console.log(`Fetching chat history, starting after messageId: ${lastMessageId}`);
-        fetch(`chat/history/`, {
-            method: 'GET',
-        })
-        .then(response => {
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
-            }
-            return response.json();
-        })
-        .then(data => {
-            // Ensure messages are ordered by timestamp
-            data.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp)); // Make sure to use 'timestamp' as it is the key you're sending from the backend
-            console.log(`Fetched ${data.length} messages from chat history`);
-            data.forEach(chat => {
-                let messageType = chat.type === 'user' ? 'sent' : 'received';
-                const isStockResponse = chat.type === 'stock_response'; // Adjust based on actual type name if different
-                const tickerQuote = isStockResponse ? chat.ticker_quote : null;
-
-                // For stock responses, use tickerQuote as the message to display
-                const messageToDisplay = isStockResponse ? `Ticker: ${chat.query} - ${tickerQuote}` : chat.message;
-
-                displayMessage(messageToDisplay, messageType, tickerQuote); // Pass tickerQuote if your display logic uses it
-            });
-            scrollToBottom();
-        })
-        .catch(error => console.error('Error fetching chat history:', error));
-    }
-
-    document.addEventListener('DOMContentLoaded', function() {
-      // Fetch chat history
-      fetchChatHistory();
-  
-      // Check if the disclaimer has been accepted
-      if (localStorage.getItem('disclaimerAccepted') !== 'true') {
-        // Show the disclaimer modal if not accepted
-        document.getElementById('disclaimerModal').style.display = 'block';
+  // Function to fetch chat history
+  function fetchChatHistory() {
+    fetch(`chat/history/`, {
+      method: 'GET',
+    })
+    .then(response => {
+      if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
       }
-    });
-  
-    function displayMessage(message, type, tickerQuote = null) {
-        const messagesContainer = document.querySelector('.messages-box');
-        const messageElement = document.createElement('div');
-        messageElement.className = `message ${type}`;
+      return response.json();
+    })
+    .then(data => {
+      // Ensure messages are ordered by timestamp
+      data.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+      data.forEach(chat => {
+        let messageType = chat.type === 'user' ? 'sent' : 'received';
+        const isStockResponse = chat.type === 'stock_response';
+        const tickerQuote = isStockResponse ? chat.ticker_quote : null;
 
-        let displayText = message;
-        if (tickerQuote && tickerQuote !== null) { // Check explicitly for non-null values
-            displayText += ` - ${tickerQuote}`;
-        }
+        // For stock responses, use tickerQuote as the message to display
+        const messageToDisplay = isStockResponse ? `Ticker: ${chat.query} - ${tickerQuote}` : chat.message;
 
-        messageElement.innerHTML = type === 'received' ?
-            `<div class="message-text received"><b>Audney<br></b> ${displayText}</div>` :
-            `<div class="message-text sent"><b>You<br></b>${displayText}</div>`;
+        displayMessage(messageToDisplay, messageType, tickerQuote, chat.contains_html);
+      });
+      scrollToBottom();
+    })
+    .catch(error => console.error('Error fetching chat history:', error));
+  }
 
-        messagesContainer.appendChild(messageElement);
-        scrollToBottom(); // Ensure the chat window scrolls to the latest message
+  document.addEventListener('DOMContentLoaded', function() {
+    // Fetch chat history
+    fetchChatHistory();
+
+    // Check if the disclaimer has been accepted
+    if (localStorage.getItem('disclaimerAccepted') !== 'true') {
+      // Show the disclaimer modal if not accepted
+      document.getElementById('disclaimerModal').style.display = 'block';
+    }
+  });
+
+  function displayMessage(message, type, tickerQuote = null, containsHtml = false) {
+    const messagesContainer = document.querySelector('.messages-box');
+    const messageElement = document.createElement('div');
+    messageElement.className = `message ${type}`;
+
+    let displayText = message;
+    if (tickerQuote && tickerQuote !== null) { // Check explicitly for non-null values
+      displayText += ` - ${tickerQuote}`;
     }
 
-    // Function to handle message sending
-    function sendMessage(message) {
-      const payload = { message: message };
+    if (type === 'received') {
+      let cleanHTML;
+      if (containsHtml) {
+        // Sanitize the HTML, allowing the necessary attributes
+        cleanHTML = DOMPurify.sanitize(displayText, {
+          ALLOWED_TAGS: ['a', 'b', 'i', 'u', 'strong', 'em', 'ul', 'li', 'br'],
+          ALLOWED_ATTR: ['href', 'class', 'data-ticker-symbol', 'data-company-name']
+        });
+      } else {
+        // Parse markdown and sanitize
+        const rawHTML = md.render(displayText);
+        cleanHTML = DOMPurify.sanitize(rawHTML);
+      }
 
-      // Use setTimeout to delay the fetch call to handle potential race conditions
-      setTimeout(() => {
-          fetch(`/chat/response/`, {
-              method: 'POST',
-              headers: {
-                  'Content-Type': 'application/json',
-                  'X-CSRFToken': getCsrfToken(),
-              },
-              body: JSON.stringify(payload)
-          })
-          .then(response => response.json())
-          .then(data => {
-              console.log('Received message: ', data.message);  // Debugging
-            
-              // Check if the response message is valid
-              if (data.message) {
-                  displayMessage(data.message, 'received'); // Display response as a received message
-              } else {
-                  console.error('Error: received empty message.');
-                  displayMessage('An error occurred. Please try again later.', 'received'); // Display an error message if response is empty
-              }
-          })
-          .catch(error => {
-              console.error('Error sending message:', error);
-              displayMessage('An error occurred. Please try again later.', 'received'); // Display a generic error message
-          })
-          .finally(() => {
-              // Hide the loading indicator
-              messageWaitIcon.style.display = 'none';
-          });
-      }, 500);  // Delay of 500ms
+      messageElement.innerHTML = `
+        <div class="message-text">
+          <div class="message-sender">
+            <b>Audney</b>
+          </div>
+          <div class="message-content">${cleanHTML}</div>
+        </div>
+      `;
+    } else {
+      // For sent messages, escape HTML to prevent XSS
+      const escapedText = displayText.replace(/</g, "&lt;").replace(/>/g, "&gt;");
+
+      messageElement.innerHTML = `
+        <div class="message-text">
+          <div class="message-sender">
+            <b>You</b>
+          </div>
+          <div class="message-content">${escapedText}</div>
+        </div>
+      `;
+    }
+
+    messagesContainer.appendChild(messageElement);
+    scrollToBottom(); // Ensure the chat window scrolls to the latest message
   }
-  
-  
-    // Function to fetch and display stock price
-    function fetchStockPrice(symbol, companyName) {
-      messageWaitIcon.style.display = 'block'; // Show loading indicator
-  
-      fetch(`/get_stock_price/?symbol=${encodeURIComponent(symbol)}&companyName=${encodeURIComponent(companyName)}`, {
-        method: 'GET',
+
+  // Function to handle message sending
+  function sendMessage(message) {
+    const payload = { message: message };
+
+    // Show the loading indicator
+    messageWaitIcon.style.display = 'block';
+
+    // Use setTimeout to delay the fetch call to handle potential race conditions
+    setTimeout(() => {
+      fetch(`/chat/response/`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRFToken': getCsrfToken(),
+        },
+        body: JSON.stringify(payload)
       })
       .then(response => response.json())
       .then(data => {
-        if (data.success) {
-          displayMessage(`${companyName} is currently priced at ${data.price}`, 'received');
+        console.log('Received message: ', data.message);  // Debugging
+
+        // Check if the response message is valid
+        if (data.message) {
+          displayMessage(data.message, 'received', null, data.html); // Pass 'contains_html' flag
         } else {
-          displayMessage('Error fetching stock price.', 'received');
+          console.error('Error: received empty message.');
+          displayMessage('An error occurred. Please try again later.', 'received'); // Display an error message if response is empty
         }
       })
       .catch(error => {
-        console.error('Error fetching stock price:', error);
-        displayMessage('Error fetching stock price.', 'received');
+        console.error('Error sending message:', error);
+        displayMessage('An error occurred. Please try again later.', 'received'); // Display a generic error message
       })
-      .finally(() => messageWaitIcon.style.display = 'none');
-    }
-  
-    // Initialization code to set up event listeners
-    document.addEventListener('DOMContentLoaded', () => {
-      const messageForm = document.querySelector('.message-form');
-      const messageInput = document.querySelector('.message-input');
-      const messageWaitIcon = document.getElementById('messageWaitIcon');
-      messageWaitIcon.style.display = 'none'; // Initially hide the loading indicator
-  
-      messageForm.addEventListener('submit', event => {
-        event.preventDefault();
-        const message = messageInput.value.trim();
-        if (message) {
-          displayMessage(message, 'sent');
-          sendMessage(message);
-          messageInput.value = ''; // Clear the input field
-        }
-        messageWaitIcon.style.display = 'block'; // Show loading indicator
+      .finally(() => {
+        // Hide the loading indicator
+        messageWaitIcon.style.display = 'none';
       });
+    }, 500);  // Delay of 500ms
+  }
 
-      fetchChatHistory(); // Fetch chat history when the page loads
-  
-      // Handling clicks on stock links within messages
-      document.querySelector('.messages-box').addEventListener('click', event => {
-        const stockLink = event.target.closest('.stock-link');
-        if (stockLink) {
-          const tickerSymbol = stockLink.getAttribute('data-ticker-symbol');
-          const companyName = stockLink.textContent.split('(')[0].trim();
-          fetchStockPrice(tickerSymbol, companyName);
-        }
-      });
-    });
-  
-    // Function to scroll the chat to the bottom
-    function scrollToBottom() {
-      const messagesBox = document.querySelector('.messages-box');
-      messagesBox.scrollTop = messagesBox.scrollHeight;
-    }
+  // Function to fetch and display stock price
+  function fetchStockPrice(symbol, companyName) {
+    messageWaitIcon.style.display = 'block'; // Show loading indicator
 
-    // Modal script
-    const modal = document.getElementById('disclaimerModal');
-    const btn = document.getElementById('understandButton');
-    const span = document.getElementsByClassName('close')[0];
-
-    btn.onclick = function() {
-      modal.style.display = 'none';
-      // Save acceptance to localStorage
-      localStorage.setItem('disclaimerAccepted', 'true');
-    };
-
-    span.onclick = function() {
-    window.location.href = '/logout';
-    };
-
-    window.onload = function() {
-      if (localStorage.getItem('disclaimerAccepted') !== 'true') {
-        modal.style.display = 'block';
+    fetch(`/get_stock_price/?symbol=${encodeURIComponent(symbol)}&companyName=${encodeURIComponent(companyName)}`, {
+      method: 'GET',
+    })
+    .then(response => response.json())
+    .then(data => {
+      if (data.success) {
+        displayMessage(`${companyName} is currently priced at ${data.price}`, 'received');
+      } else {
+        displayMessage('Error fetching stock price.', 'received');
       }
-    };
+    })
+    .catch(error => {
+      console.error('Error fetching stock price:', error);
+      displayMessage('Error fetching stock price.', 'received');
+    })
+    .finally(() => messageWaitIcon.style.display = 'none');
+  }
 
-    // Logout functionality
-    // document.getElementById('logoutButton').addEventListener('click', function() {
-      // localStorage.removeItem('disclaimerAccepted');
-      // window.location.href = '/logout'; // Replace with your actual logout URL
-    // });
+  // Initialization code to set up event listeners
+  document.addEventListener('DOMContentLoaded', () => {
+    const messageForm = document.querySelector('.message-form');
+    const messageInput = document.querySelector('.message-input');
+    const messageWaitIcon = document.getElementById('messageWaitIcon');
+    messageWaitIcon.style.display = 'none'; // Initially hide the loading indicator
 
-  </script>
-  
-  
-  {% endblock %}
+    messageForm.addEventListener('submit', event => {
+      event.preventDefault();
+      const message = messageInput.value.trim();
+      if (message) {
+        displayMessage(message, 'sent');
+        sendMessage(message);
+        messageInput.value = ''; // Clear the input field
+      }
+      messageWaitIcon.style.display = 'block'; // Show loading indicator
+    });
+
+    // Handling clicks on stock links within messages
+    document.querySelector('.messages-box').addEventListener('click', event => {
+      const stockLink = event.target.closest('.stock-link');
+      if (stockLink) {
+        event.preventDefault(); // Prevent default link behavior
+        const tickerSymbol = stockLink.getAttribute('data-ticker-symbol');
+        const companyName = stockLink.getAttribute('data-company-name');
+        fetchStockPrice(tickerSymbol, companyName);
+      }
+    });
+  });
+
+  // Function to scroll the chat to the bottom
+  function scrollToBottom() {
+    const messagesBox = document.querySelector('.messages-box');
+    messagesBox.scrollTop = messagesBox.scrollHeight;
+  }
+
+  // Modal script
+  const modal = document.getElementById('disclaimerModal');
+  const btn = document.getElementById('understandButton');
+  const span = document.getElementsByClassName('disclaimer-close')[0];
+
+  btn.onclick = function() {
+    modal.style.display = 'none';
+    // Save acceptance to localStorage
+    localStorage.setItem('disclaimerAccepted', 'true');
+  };
+
+  span.onclick = function() {
+    window.location.href = '/logout';
+  };
+
+  window.onload = function() {
+    if (localStorage.getItem('disclaimerAccepted') !== 'true') {
+      modal.style.display = 'block';
+    }
+  };
+</script>
+
+{% endblock %}

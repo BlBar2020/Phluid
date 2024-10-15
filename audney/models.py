@@ -90,6 +90,7 @@ class UserProfile(models.Model):
     ]
 
     INCOME_LEVEL_CHOICES = [
+        ('<55000', '<$55,000'),
         ('55001_89000', '$55,001 - $89,000'),
         ('89001_150000', '$89,001 - $150,000'),
         ('150001_plus', '$150,001+'),
@@ -101,6 +102,7 @@ class UserProfile(models.Model):
     ]
 
     SAVINGS_MONTHS_CHOICES = [
+        ('0_months', '0 months'),
         ('3_months', '3 months'),
         ('6_months', '6 months'),
         ('9_months', '9 months'),
